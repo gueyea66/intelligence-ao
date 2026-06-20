@@ -1,17 +1,17 @@
 """
-Dashboard Streamlit — Intelligence Commerciale Afrique de l'Ouest
-4 onglets : Marché | Appels d'Offres | Informel | Réseau
-
-Lancer : streamlit run src/dashboard/app.py
+Dashboard Intelligence Commerciale AO — Sprint 4
+Plotly interactif : drill-down, insights statistiques, conjoncture, anomalies.
 """
 import json
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 from src.utils.config_loader import load_config
@@ -27,9 +27,8 @@ def _get_distinct(session, column) -> list:
         return []
 
 
-# ── Config page ──────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Intelligence Commerciale AO",
+    page_title="Intel Commerciale AO",
     page_icon="🌍",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -37,280 +36,425 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-.metric-card {
-    background: linear-gradient(135deg, #1565c0, #0d47a1);
-    border-radius: 12px; padding: 16px; color: white; margin: 4px;
+div[data-testid="metric-container"] {
+    background: linear-gradient(135deg,#1565c0,#0d47a1);
+    border-radius:10px; padding:12px; color:white;
 }
-.metric-val { font-size: 2rem; font-weight: bold; }
-.metric-lbl { font-size: 0.85rem; opacity: 0.8; }
-.priority-high { background: #ffebee; border-left: 4px solid #d32f2f; padding: 8px; border-radius: 4px; }
-.priority-med  { background: #fff8e1; border-left: 4px solid #f57c00; padding: 8px; border-radius: 4px; }
+div[data-testid="metric-container"] label { color:rgba(255,255,255,0.8)!important; }
+div[data-testid="metric-container"] div[data-testid="metric-value"] { color:white!important; }
 </style>
 """, unsafe_allow_html=True)
 
 
 @st.cache_resource
 def get_config():
+    import os
+    # Sur Streamlit Cloud : injecter les secrets dans l'env
+    try:
+        for k, v in st.secrets.items():
+            if isinstance(v, str):
+                os.environ.setdefault(k, v)
+            elif isinstance(v, dict):
+                for kk, vv in v.items():
+                    os.environ.setdefault(kk, str(vv))
+    except Exception:
+        pass
     return load_config()
 
 @st.cache_resource
 def get_db_session():
-    return get_session(get_config())
+    import os
+    from src.database.models import get_engine, Base
+    from sqlalchemy.orm import sessionmaker
+    cfg = get_config()
+    # Supabase PostgreSQL si DATABASE_URL configuré, sinon SQLite local
+    db_url = os.getenv("DATABASE_URL", "")
+    if db_url and db_url.startswith("postgresql"):
+        from sqlalchemy import create_engine
+        engine = create_engine(db_url, pool_pre_ping=True)
+        Base.metadata.create_all(engine)
+        Session = sessionmaker(bind=engine)
+        return Session()
+    return get_session(cfg)
+
+@st.cache_data(ttl=300)
+def load_produits_df():
+    session = get_db_session()
+    produits = session.query(Produit).filter(
+        Produit.prix_actuel.isnot(None),
+        Produit.prix_actuel > 100,
+        Produit.prix_actuel < 20_000_000,
+    ).all()
+    if not produits:
+        return pd.DataFrame()
+    return pd.DataFrame([{
+        "id":        str(p.id),
+        "Marque":    p.marque or "—",
+        "Modèle":    (p.modele or "")[:60],
+        "Catégorie": p.categorie_1 or "Divers",
+        "Sous-cat":  p.categorie_2 or "",
+        "Prix":      p.prix_actuel,
+        "Barré":     p.prix_barre,
+        "Promo":     p.promotion,
+        "Source":    p.source,
+        "Pays":      p.pays or "Sénégal",
+        "Date":      p.date_collecte,
+    } for p in produits])
+
+@st.cache_data(ttl=300)
+def load_insights():
+    from src.analytics.insights_engine import generer_insights
+    return generer_insights(get_config())
+
+@st.cache_data(ttl=600)
+def load_macro_df():
+    try:
+        from src.database.models import DonneeMacro
+        session = get_db_session()
+        rows = session.query(DonneeMacro).order_by(DonneeMacro.pays, DonneeMacro.annee).all()
+        if not rows:
+            return pd.DataFrame()
+        return pd.DataFrame([{
+            "Pays":        r.pays,
+            "Indicateur":  r.indicateur,
+            "Catégorie":   r.categorie,
+            "Année":       r.annee,
+            "Valeur":      r.valeur,
+            "Unité":       r.unite,
+            "Source":      r.source,
+        } for r in rows])
+    except Exception:
+        return pd.DataFrame()
 
 
 config  = get_config()
 session = get_db_session()
 
-
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🌍 Intel Commerciale")
-    st.caption("Afrique de l'Ouest — MVP")
+    st.caption("Afrique de l'Ouest — Sprint 4")
     st.divider()
 
     stats = stats_summary(config)
-
-    col_a, col_b = st.columns(2)
-    with col_a:
+    c1, c2 = st.columns(2)
+    with c1:
         st.metric("Produits", f"{stats['nb_produits']:,}")
         st.metric("AOs actifs", stats["nb_aos_actifs"])
-    with col_b:
+    with c2:
         st.metric("🔴 Prioritaires", stats["ao_prioritaires"])
         st.metric("Informel", stats["nb_informel"])
 
     st.divider()
-
-    derniere_collecte = session.query(Produit.date_collecte)\
-        .order_by(Produit.date_collecte.desc()).first()
-    if derniere_collecte:
-        st.caption(f"Dernière collecte : {derniere_collecte[0].strftime('%d/%m %H:%M')}")
-
-    st.divider()
-    if st.button("🔄 Rafraîchir"):
+    if st.button("🔄 Rafraîchir tout"):
+        st.cache_data.clear()
         st.cache_resource.clear()
         st.rerun()
 
     st.divider()
-    st.caption("Commandes rapides :")
-    st.code("python main.py scrape\npython main.py score\npython main.py export", language="bash")
+    st.caption("Commandes :")
+    st.code("python main.py scrape\npython main.py score", language="bash")
 
 
 # ── Onglets ───────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4 = st.tabs([
-    "📦 Vue Marché",
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "📊 Insights",
+    "📦 Catalogue",
     "📋 Appels d'Offres",
-    "🏪 Marché Informel",
+    "🌍 Conjoncture",
+    "🏪 Informel",
     "🤝 Réseau",
 ])
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB 1 — VUE MARCHÉ
+# TAB 1 — INSIGHTS STATISTIQUES
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 with tab1:
-    st.header("📦 Catalogue Produits")
+    st.header("📊 Insights & Analyse de Marché")
 
-    # KPIs
-    k1, k2, k3, k4 = st.columns(4)
-    total_produits = session.query(Produit).count()
-    nb_sources     = len(_get_distinct(session, Produit.source))
-    nb_categories  = len(_get_distinct(session, Produit.categorie_1))
-    nb_marques     = len(_get_distinct(session, Produit.marque))
-    k1.metric("Total produits", f"{total_produits:,}")
-    k2.metric("Sources actives", nb_sources)
-    k3.metric("Catégories", nb_categories)
-    k4.metric("Marques", nb_marques)
+    df = load_produits_df()
+    if df.empty:
+        st.info("Lancer : `python main.py scrape --source ecommerce`")
+    else:
+        insights = load_insights()
 
-    st.divider()
-
-    # Filtres
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        filtre_cat = st.selectbox("Catégorie", ["Toutes"] + _get_distinct(session, Produit.categorie_1))
-    with col2:
-        filtre_marque = st.selectbox("Marque", ["Toutes"] + _get_distinct(session, Produit.marque))
-    with col3:
-        filtre_source = st.selectbox("Source", ["Toutes"] + _get_distinct(session, Produit.source))
-    with col4:
-        filtre_promo = st.checkbox("Promotions seulement")
-
-    q = session.query(Produit)
-    if filtre_cat != "Toutes":    q = q.filter(Produit.categorie_1 == filtre_cat)
-    if filtre_marque != "Toutes": q = q.filter(Produit.marque == filtre_marque)
-    if filtre_source != "Toutes": q = q.filter(Produit.source == filtre_source)
-    if filtre_promo:              q = q.filter(Produit.promotion == True)
-
-    produits = q.order_by(Produit.date_collecte.desc()).limit(1000).all()
-
-    if produits:
-        df = pd.DataFrame([{
-            "Marque":      p.marque or "",
-            "Modèle":      (p.modele or "")[:60],
-            "Catégorie":   p.categorie_1 or "",
-            "Prix (XOF)":  p.prix_actuel,
-            "Barré (XOF)": p.prix_barre,
-            "Promo":       "✅" if p.promotion else "",
-            "Source":      p.source,
-            "Pays":        p.pays,
-            "Date":        p.date_collecte.strftime("%d/%m/%Y") if p.date_collecte else "",
-        } for p in produits])
-
-        st.dataframe(df, use_container_width=True, hide_index=True, height=350)
-        st.caption(f"{len(produits)} produits affichés (max 1000)")
+        k1, k2, k3, k4, k5 = st.columns(5)
+        k1.metric("Produits analysés", f"{insights['nb_produits']:,}")
+        k2.metric("Catégories", len(insights["distribution_cats"]))
+        k3.metric("Anomalies prix", insights["nb_anomalies"])
+        k4.metric("Diversité marché (H)", f"{insights['entropie_marche']:.2f}")
+        k5.metric("Sources actives", insights.get("nb_sources", "—"))
 
         st.divider()
-        col_g1, col_g2 = st.columns(2)
+        col1, col2 = st.columns(2)
 
-        with col_g1:
-            st.subheader("Prix moyen par catégorie (XOF)")
-            df_cat = df[df["Prix (XOF)"].notna() & (df["Prix (XOF)"] > 0) & (df["Prix (XOF)"] < 10_000_000)]
-            if not df_cat.empty:
-                prix_moy = df_cat.groupby("Catégorie")["Prix (XOF)"].mean().sort_values(ascending=False).head(10)
-                st.bar_chart(prix_moy)
+        with col1:
+            st.subheader("Distribution produits par catégorie")
+            dist = insights["distribution_cats"]
+            fig = px.pie(
+                values=list(dist.values()),
+                names=list(dist.keys()),
+                hole=0.4,
+                color_discrete_sequence=px.colors.qualitative.Bold,
+            )
+            fig.update_traces(textposition='inside', textinfo='percent+label')
+            fig.update_layout(showlegend=False, height=380, margin=dict(t=20,b=20))
+            st.plotly_chart(fig, use_container_width=True)
 
-        with col_g2:
-            st.subheader("Top 10 marques (volume)")
-            top_marques = df["Marque"].value_counts().head(10)
-            if not top_marques.empty:
-                st.bar_chart(top_marques)
+        with col2:
+            st.subheader("Prix moyen & médian par catégorie")
+            cats     = list(insights["stats_categories"].keys())
+            moyennes = [insights["stats_categories"][c].get("mean", 0) for c in cats]
+            medianes = [insights["stats_categories"][c].get("median", 0) for c in cats]
 
-        st.subheader("Répartition par source")
-        src_count = df["Source"].value_counts()
-        st.bar_chart(src_count)
+            fig2 = go.Figure()
+            fig2.add_trace(go.Bar(name="Moyenne", x=cats, y=moyennes, marker_color="#1565c0"))
+            fig2.add_trace(go.Bar(name="Médiane", x=cats, y=medianes, marker_color="#42a5f5"))
+            fig2.update_layout(barmode="group", height=380,
+                               xaxis_tickangle=-30, yaxis_title="XOF",
+                               margin=dict(t=20, b=80))
+            st.plotly_chart(fig2, use_container_width=True)
 
-    else:
-        st.info("Aucun produit. Lancer : `python main.py scrape --source ecommerce`")
+        st.divider()
+        col3, col4 = st.columns(2)
+
+        with col3:
+            st.subheader("📦 Drill-down catégorie")
+            cat_sel = st.selectbox("Catégorie", list(insights["stats_categories"].keys()))
+            s = insights["stats_categories"].get(cat_sel, {})
+            if s:
+                df_cat = df[df["Catégorie"] == cat_sel]["Prix"].dropna()
+                if not df_cat.empty:
+                    fig_box = go.Figure()
+                    fig_box.add_trace(go.Box(y=df_cat, name=cat_sel,
+                                             boxpoints="outliers",
+                                             marker_color="#1565c0"))
+                    fig_box.update_layout(height=280, margin=dict(t=10,b=10))
+                    st.plotly_chart(fig_box, use_container_width=True)
+                c_a, c_b, c_c = st.columns(3)
+                c_a.metric("Nb produits", s.get("n", 0))
+                c_b.metric("Prix médian", f"{s.get('median',0):,.0f} XOF")
+                c_c.metric("CV (volatilité)", f"{s.get('cv',0):.1f}%")
+
+        with col4:
+            st.subheader("🏭 Concentration marché (HHI)")
+            hhi_data = insights.get("hhi_par_categorie", {})
+            if hhi_data:
+                hhi_rows = [{"Catégorie": c, "HHI": v["hhi"],
+                             "Interprétation": v["interpretation"],
+                             "Nb acteurs": v["nb_acteurs"]}
+                            for c, v in hhi_data.items()]
+                df_hhi = pd.DataFrame(hhi_rows).sort_values("HHI", ascending=False)
+                fig_hhi = px.bar(df_hhi, x="Catégorie", y="HHI",
+                                 color="HHI",
+                                 color_continuous_scale=["#4caf50","#ff9800","#f44336"],
+                                 range_color=[0, 5000],
+                                 hover_data=["Interprétation","Nb acteurs"])
+                fig_hhi.add_hline(y=1500, line_dash="dash", line_color="orange",
+                                  annotation_text="Seuil concurrentiel")
+                fig_hhi.add_hline(y=2500, line_dash="dash", line_color="red",
+                                  annotation_text="Seuil concentration")
+                fig_hhi.update_layout(height=300, margin=dict(t=10,b=60))
+                st.plotly_chart(fig_hhi, use_container_width=True)
+            else:
+                st.info("HHI : données insuffisantes")
+
+        st.divider()
+        st.subheader(f"⚠️ Anomalies de prix ({len(insights['anomalies_prix'])})")
+        if insights["anomalies_prix"]:
+            df_ano = pd.DataFrame(insights["anomalies_prix"])
+            fig_ano = px.scatter(
+                df_ano, x="produit", y="prix",
+                size="z_score", color="deviation",
+                color_discrete_map={"sur-évalué":"#f44336","sous-évalué":"#4caf50"},
+                hover_data=["z_score","categorie","source"],
+            )
+            fig_ano.update_layout(height=300, xaxis_tickangle=-30, margin=dict(t=10,b=100))
+            st.plotly_chart(fig_ano, use_container_width=True)
+            with st.expander("Détail"):
+                st.dataframe(df_ano, hide_index=True)
+
+        st.divider()
+        st.subheader("🏆 Top 20 marques")
+        top_m = insights.get("top_marques", {})
+        if top_m:
+            df_m = pd.DataFrame({"Marque": list(top_m.keys()), "Produits": list(top_m.values())})
+            fig_m = px.bar(df_m.sort_values("Produits", ascending=True).tail(20),
+                           x="Produits", y="Marque", orientation="h",
+                           color="Produits", color_continuous_scale="Blues")
+            fig_m.update_layout(height=450, margin=dict(t=10,l=120))
+            st.plotly_chart(fig_m, use_container_width=True)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB 2 — APPELS D'OFFRES
+# TAB 2 — CATALOGUE PRODUITS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 with tab2:
+    st.header("📦 Catalogue Produits")
+    df = load_produits_df()
+
+    if df.empty:
+        st.info("Aucun produit. Lancer : `python main.py scrape --source ecommerce`")
+    else:
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            f_cat = st.selectbox("Catégorie", ["Toutes"] + sorted(df["Catégorie"].unique().tolist()), key="cat2")
+        with col2:
+            f_src = st.selectbox("Source", ["Toutes"] + sorted(df["Source"].unique().tolist()), key="src2")
+        with col3:
+            prix_range = st.slider("Prix (XOF)", int(df["Prix"].min()),
+                                   int(min(df["Prix"].max(), 5_000_000)), (0, 500_000))
+        with col4:
+            f_promo = st.checkbox("Promos uniquement")
+
+        dff = df.copy()
+        if f_cat != "Toutes": dff = dff[dff["Catégorie"] == f_cat]
+        if f_src != "Toutes": dff = dff[dff["Source"]    == f_src]
+        if f_promo:           dff = dff[dff["Promo"]      == True]
+        dff = dff[(dff["Prix"] >= prix_range[0]) & (dff["Prix"] <= prix_range[1])]
+
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Filtrés", f"{len(dff):,}")
+        k2.metric("Prix moyen",  f"{dff['Prix'].mean():,.0f} XOF" if len(dff) else "—")
+        k3.metric("Prix médian", f"{dff['Prix'].median():,.0f} XOF" if len(dff) else "—")
+        k4.metric("Promos", len(dff[dff["Promo"] == True]))
+
+        st.dataframe(
+            dff[["Marque","Modèle","Catégorie","Sous-cat","Prix","Barré","Promo","Source","Date"]].head(500),
+            use_container_width=True, hide_index=True, height=300,
+        )
+
+        col_g1, col_g2 = st.columns(2)
+        with col_g1:
+            if len(dff) > 5:
+                fig = px.histogram(dff, x="Prix", nbins=50, color_discrete_sequence=["#1565c0"],
+                                   title="Distribution des prix")
+                fig.update_layout(height=300, margin=dict(t=30,b=10))
+                st.plotly_chart(fig, use_container_width=True)
+        with col_g2:
+            if len(dff) > 5:
+                top_sc = dff["Sous-cat"].value_counts().head(8).index
+                dff_sc = dff[dff["Sous-cat"].isin(top_sc)]
+                if not dff_sc.empty:
+                    fig2 = px.box(dff_sc, x="Sous-cat", y="Prix", color="Sous-cat",
+                                  points="outliers", title="Box plot par sous-catégorie")
+                    fig2.update_layout(height=300, showlegend=False,
+                                       xaxis_tickangle=-30, margin=dict(t=30,b=80))
+                    st.plotly_chart(fig2, use_container_width=True)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# TAB 3 — APPELS D'OFFRES
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+with tab3:
     st.header("📋 Appels d'Offres")
 
-    # KPIs AO
-    k1, k2, k3, k4, k5 = st.columns(5)
-    total_aos  = session.query(AppelOffre).count()
-    actifs_aos = session.query(AppelOffre).filter(AppelOffre.date_limite >= datetime.utcnow()).count()
-    hauts      = session.query(AppelOffre).filter(AppelOffre.score >= config["scoring"]["seuils"]["priorite_haute"]).count()
-    surveiller = session.query(AppelOffre).filter(
-        AppelOffre.score >= config["scoring"]["seuils"]["a_surveiller"],
-        AppelOffre.score < config["scoring"]["seuils"]["priorite_haute"]
-    ).count()
-    non_scores = session.query(AppelOffre).filter(AppelOffre.score.is_(None)).count()
+    seuil_h = config["scoring"]["seuils"]["priorite_haute"]
+    seuil_s = config["scoring"]["seuils"]["a_surveiller"]
 
+    total_aos  = session.query(AppelOffre).count()
+    actifs     = session.query(AppelOffre).filter(AppelOffre.date_limite >= datetime.utcnow()).count()
+    hauts      = session.query(AppelOffre).filter(AppelOffre.score >= seuil_h).count()
+    surveiller = session.query(AppelOffre).filter(
+        AppelOffre.score >= seuil_s, AppelOffre.score < seuil_h).count()
+
+    k1, k2, k3, k4 = st.columns(4)
     k1.metric("Total AOs", total_aos)
-    k2.metric("Actifs", actifs_aos)
+    k2.metric("Actifs", actifs)
     k3.metric("🔴 HAUTE priorité", hauts)
     k4.metric("🟡 À surveiller", surveiller)
-    k5.metric("Non scorés", non_scores)
-
-    if non_scores > 0:
-        st.warning(f"⚠️ {non_scores} AOs non scorés. Lancer : `python main.py score`")
 
     st.divider()
-
-    # Filtres
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     with col1:
-        filtre_pays_ao = st.selectbox("Pays", ["Tous"] + _get_distinct(session, AppelOffre.pays), key="ao_pays")
+        f_pays_ao = st.selectbox("Pays", ["Tous"] + _get_distinct(session, AppelOffre.pays), key="ao_pays")
     with col2:
-        filtre_source_ao = st.selectbox("Source", ["Toutes"] + _get_distinct(session, AppelOffre.source), key="ao_src")
+        f_src_ao = st.selectbox("Source", ["Toutes"] + _get_distinct(session, AppelOffre.source), key="ao_src")
     with col3:
-        score_min = st.slider("Score minimum", 0, 100, 0)
-    with col4:
-        actifs_seulement = st.checkbox("Actifs seulement", value=True)
+        score_min = st.slider("Score minimum", 0, 100, 0, key="ao_score")
 
     q_ao = session.query(AppelOffre)
-    if filtre_pays_ao != "Tous":      q_ao = q_ao.filter(AppelOffre.pays == filtre_pays_ao)
-    if filtre_source_ao != "Toutes":  q_ao = q_ao.filter(AppelOffre.source == filtre_source_ao)
-    if score_min > 0:                 q_ao = q_ao.filter(AppelOffre.score >= score_min)
-    if actifs_seulement:              q_ao = q_ao.filter(AppelOffre.date_limite >= datetime.utcnow())
-
+    if f_pays_ao != "Tous":  q_ao = q_ao.filter(AppelOffre.pays == f_pays_ao)
+    if f_src_ao != "Toutes": q_ao = q_ao.filter(AppelOffre.source == f_src_ao)
+    if score_min > 0:         q_ao = q_ao.filter(AppelOffre.score >= score_min)
     aos = q_ao.order_by(AppelOffre.score.desc().nullslast()).limit(500).all()
 
     if aos:
         rows = []
         for ao in aos:
-            score = ao.score or 0
-            niveau = "🔴 HAUTE" if score >= 70 else ("🟡 SURVEILLER" if score >= 40 else "⚪ ARCHIVÉ")
+            score  = ao.score or 0
+            niveau = "🔴 HAUTE" if score >= seuil_h else ("🟡 SURVEILLER" if score >= seuil_s else "⚪ ARCHIVÉ")
             rows.append({
-                "Score":          f"{score:.0f}" if score else "—",
-                "Niveau":         niveau,
-                "Source":         ao.source,
-                "Référence":      ao.reference or "",
-                "Objet":          (ao.objet or "")[:80],
-                "Entité":         ao.entite or "",
-                "Pays":           ao.pays or "",
-                "Budget":         f"{ao.budget_estime:,.0f} {ao.devise}" if ao.budget_estime else "—",
-                "Jours":          ao.jours_restants,
-                "Positionnement": ao.positionnement or "—",
+                "Score":    f"{score:.0f}" if score else "—",
+                "Niveau":   niveau,
+                "Source":   ao.source,
+                "Référence":ao.reference or "",
+                "Objet":    (ao.objet or "")[:80],
+                "Entité":   ao.entite or "",
+                "Pays":     ao.pays or "",
+                "Budget":   f"{ao.budget_estime:,.0f} {ao.devise}" if ao.budget_estime else "—",
+                "Jours":    ao.jours_restants,
             })
-
         df_ao = pd.DataFrame(rows)
-        st.dataframe(df_ao, use_container_width=True, hide_index=True, height=350)
-        st.caption(f"{len(aos)} AOs affichés")
+        st.dataframe(df_ao, use_container_width=True, hide_index=True, height=300)
 
-        # Graphiques AO
-        st.divider()
         col_g1, col_g2, col_g3 = st.columns(3)
-
         with col_g1:
-            st.subheader("Distribution scores")
-            scores = [ao.score for ao in aos if ao.score is not None]
+            scores = [ao.score for ao in aos if ao.score]
             if scores:
-                df_s = pd.DataFrame({"Score": scores})
-                bins = pd.cut(df_s["Score"], bins=[0,40,70,100], labels=["⚪ <40","🟡 40-70","🔴 >70"])
-                st.bar_chart(bins.value_counts())
-
+                fig_s = px.histogram(scores, nbins=20, color_discrete_sequence=["#1565c0"],
+                                     title="Distribution scores")
+                fig_s.add_vline(x=seuil_s, line_dash="dash", line_color="orange")
+                fig_s.add_vline(x=seuil_h, line_dash="dash", line_color="red")
+                fig_s.update_layout(height=250, margin=dict(t=30,b=10))
+                st.plotly_chart(fig_s, use_container_width=True)
         with col_g2:
-            st.subheader("AOs par pays")
-            pays_count = df_ao["Pays"].value_counts().head(10)
-            if not pays_count.empty:
-                st.bar_chart(pays_count)
-
+            pays_count = df_ao["Pays"].value_counts()
+            fig_p = px.bar(pays_count, title="AOs par pays",
+                           color_discrete_sequence=["#1565c0"])
+            fig_p.update_layout(height=250, margin=dict(t=30,b=30))
+            st.plotly_chart(fig_p, use_container_width=True)
         with col_g3:
-            st.subheader("AOs par source")
-            src_count_ao = df_ao["Source"].value_counts()
-            if not src_count_ao.empty:
-                st.bar_chart(src_count_ao)
+            jours = [ao.jours_restants for ao in aos if ao.jours_restants is not None]
+            if jours:
+                fig_j = px.histogram(jours, nbins=15, title="Délais restants",
+                                     color_discrete_sequence=["#42a5f5"])
+                fig_j.add_vline(x=7, line_dash="dash", line_color="red", annotation_text="7j")
+                fig_j.update_layout(height=250, margin=dict(t=30,b=10))
+                st.plotly_chart(fig_j, use_container_width=True)
 
-        # Détail AO
         st.divider()
-        st.subheader("Détail AO")
         refs = [ao.reference for ao in aos if ao.reference]
         if refs:
-            ref_sel = st.selectbox("Sélectionner un AO", refs[:50])
+            ref_sel = st.selectbox("Détail AO", refs[:50])
             ao_sel  = next((a for a in aos if a.reference == ref_sel), None)
             if ao_sel:
-                with st.expander("Détail complet", expanded=True):
+                with st.expander("📄 Fiche complète", expanded=True):
                     c1, c2, c3 = st.columns(3)
                     with c1:
                         st.write(f"**Référence :** {ao_sel.reference}")
                         st.write(f"**Source :** {ao_sel.source}")
                         st.write(f"**Entité :** {ao_sel.entite or '—'}")
-                        st.write(f"**Pays :** {ao_sel.pays}")
                     with c2:
                         st.write(f"**Score :** {ao_sel.score}")
-                        st.write(f"**Catégorie :** {ao_sel.categorie}")
-                        st.write(f"**Budget :** {ao_sel.budget_estime:,.0f} {ao_sel.devise}" if ao_sel.budget_estime else "**Budget :** —")
-                        st.write(f"**Date limite :** {ao_sel.date_limite.strftime('%d/%m/%Y') if ao_sel.date_limite else '—'}")
+                        st.write(f"**Pays :** {ao_sel.pays}")
+                        st.write(f"**Budget :** {ao_sel.budget_estime:,.0f}" if ao_sel.budget_estime else "**Budget :** —")
                     with c3:
                         st.write(f"**Jours restants :** {ao_sel.jours_restants}")
-                        st.write(f"**Positionnement :** {ao_sel.positionnement or '—'}")
                         if ao_sel.url_source:
-                            st.markdown(f"[🔗 Voir l'AO original]({ao_sel.url_source})")
-
+                            st.markdown(f"[🔗 Voir l'AO]({ao_sel.url_source})")
                     st.write("**Objet :**", ao_sel.objet or "—")
 
                     if ao_sel.detail_scores:
                         try:
                             detail = json.loads(ao_sel.detail_scores)
-                            st.subheader("Détail des scores par critère")
-                            df_detail = pd.DataFrame(
-                                list(detail.items()), columns=["Critère", "Score"]
-                            ).set_index("Critère")
-                            st.bar_chart(df_detail)
+                            fig_d = px.bar(x=list(detail.keys()), y=list(detail.values()),
+                                           labels={"x":"Critère","y":"Score"},
+                                           color=list(detail.values()),
+                                           color_continuous_scale="Blues")
+                            fig_d.update_layout(height=250, margin=dict(t=10,b=60))
+                            st.plotly_chart(fig_d, use_container_width=True)
                         except Exception:
                             pass
     else:
@@ -318,222 +462,272 @@ with tab2:
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB 3 — MARCHÉ INFORMEL
+# TAB 4 — CONJONCTURE ÉCONOMIQUE
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-with tab3:
+with tab4:
+    st.header("🌍 Conjoncture Économique — Afrique de l'Ouest")
+
+    df_macro = load_macro_df()
+
+    if df_macro.empty:
+        st.warning("Données macro non encore collectées.")
+        if st.button("🚀 Collecter maintenant (World Bank API)"):
+            with st.spinner("Collecte en cours..."):
+                from src.scrapers.macro import world_bank
+                n = world_bank.run(config)
+                st.cache_data.clear()
+                st.success(f"✅ {n} indicateurs collectés !")
+                st.rerun()
+    else:
+        pays_disponibles = sorted(df_macro["Pays"].unique().tolist())
+        cats_disponibles = sorted(df_macro["Catégorie"].unique().tolist())
+
+        col1, col2 = st.columns(2)
+        with col1:
+            pays_sel = st.multiselect("Pays", pays_disponibles, default=pays_disponibles[:4])
+        with col2:
+            cat_sel = st.selectbox("Thème", cats_disponibles)
+
+        dff_m = df_macro[(df_macro["Pays"].isin(pays_sel)) & (df_macro["Catégorie"] == cat_sel)]
+
+        if not dff_m.empty:
+            indicateurs = dff_m["Indicateur"].unique().tolist()
+            ind_sel = st.selectbox("Indicateur", indicateurs)
+            dff_ind = dff_m[dff_m["Indicateur"] == ind_sel]
+
+            fig_m = px.line(dff_ind, x="Année", y="Valeur", color="Pays",
+                            title=f"{ind_sel}", markers=True,
+                            color_discrete_sequence=px.colors.qualitative.Bold)
+            fig_m.update_layout(height=400, margin=dict(t=40,b=20))
+            st.plotly_chart(fig_m, use_container_width=True)
+
+            derniere = dff_ind.sort_values("Année", ascending=False).groupby("Pays").first().reset_index()
+            fig_bar = px.bar(derniere, x="Pays", y="Valeur", color="Pays", text="Valeur",
+                             title="Dernière valeur disponible",
+                             color_discrete_sequence=px.colors.qualitative.Bold)
+            fig_bar.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+            fig_bar.update_layout(height=320, showlegend=False, margin=dict(t=30,b=10))
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+        # Heatmap comparatif
+        st.divider()
+        st.subheader("🗺️ Comparatif régional")
+        indicateurs_pivot = {
+            "PIB":       "Croissance PIB (%)",
+            "Inflation": "Inflation CPI (%)",
+            "Commerce":  "Exportations % PIB",
+        }
+        rows_heat = []
+        for theme, ind in indicateurs_pivot.items():
+            df_ind = df_macro[df_macro["Indicateur"] == ind]
+            if df_ind.empty: continue
+            for pays, row in df_ind.sort_values("Année", ascending=False).groupby("Pays").first().iterrows():
+                rows_heat.append({"Pays": pays, "Indicateur": theme, "Valeur": row["Valeur"]})
+
+        if rows_heat:
+            df_heat = pd.DataFrame(rows_heat)
+            pivot = df_heat.pivot(index="Pays", columns="Indicateur", values="Valeur")
+            fig_heat = px.imshow(pivot, color_continuous_scale="RdYlGn",
+                                 title="Heatmap régionale", aspect="auto")
+            fig_heat.update_layout(height=400, margin=dict(t=40,b=20))
+            st.plotly_chart(fig_heat, use_container_width=True)
+
+        # Publications
+        st.divider()
+        st.subheader("📚 Publications & Études")
+        try:
+            from src.database.models import EtudeConjoncture
+            etudes = session.query(EtudeConjoncture).order_by(
+                EtudeConjoncture.date_collecte.desc()).limit(50).all()
+            if etudes:
+                df_etudes = pd.DataFrame([{
+                    "Source": e.source,
+                    "Titre":  (e.titre or "")[:100],
+                    "Pays":   e.pays or "",
+                    "PDF":    "✅" if e.url_pdf else "—",
+                    "Lien":   e.url_source or "",
+                } for e in etudes])
+                st.dataframe(df_etudes, use_container_width=True, hide_index=True)
+            else:
+                st.info("Lancer `python main.py scrape --source macro`")
+        except Exception:
+            st.info("Lancer `python main.py init` pour initialiser les tables macro")
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# TAB 5 — MARCHÉ INFORMEL
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+with tab5:
     st.header("🏪 Marché Informel")
 
-    # KPIs
+    total_inf = session.query(AnnoncInformel).count()
+    nb_zones  = len(_get_distinct(session, AnnoncInformel.vendeur_zone))
+    avec_prix = session.query(AnnoncInformel).filter(AnnoncInformel.prix_unitaire.isnot(None)).count()
+
     k1, k2, k3 = st.columns(3)
-    total_inf  = session.query(AnnoncInformel).count()
-    nb_zones   = len(_get_distinct(session, AnnoncInformel.vendeur_zone))
-    avec_prix  = session.query(AnnoncInformel).filter(AnnoncInformel.prix_unitaire.isnot(None)).count()
     k1.metric("Total annonces", total_inf)
     k2.metric("Zones couvertes", nb_zones)
     k3.metric("Avec prix", avec_prix)
 
-    st.divider()
-
     col1, col2, col3 = st.columns(3)
     with col1:
-        filtre_zone = st.selectbox("Zone", ["Toutes"] + _get_distinct(session, AnnoncInformel.vendeur_zone))
+        f_zone = st.selectbox("Zone", ["Toutes"] + _get_distinct(session, AnnoncInformel.vendeur_zone))
     with col2:
-        filtre_type_inf = st.selectbox("Type", ["Tous", "offre", "demande"])
+        f_type_inf = st.selectbox("Type", ["Tous", "offre", "demande"])
     with col3:
-        recherche = st.text_input("🔍 Recherche produit", "")
+        recherche = st.text_input("🔍 Recherche produit")
 
     q_inf = session.query(AnnoncInformel)
-    if filtre_zone != "Toutes":       q_inf = q_inf.filter(AnnoncInformel.vendeur_zone == filtre_zone)
-    if filtre_type_inf != "Tous":     q_inf = q_inf.filter(AnnoncInformel.type == filtre_type_inf)
-    if recherche:                     q_inf = q_inf.filter(AnnoncInformel.produit.ilike(f"%{recherche}%"))
-
+    if f_zone != "Toutes":   q_inf = q_inf.filter(AnnoncInformel.vendeur_zone == f_zone)
+    if f_type_inf != "Tous": q_inf = q_inf.filter(AnnoncInformel.type == f_type_inf)
+    if recherche:            q_inf = q_inf.filter(AnnoncInformel.produit.ilike(f"%{recherche}%"))
     annonces = q_inf.order_by(AnnoncInformel.date_collecte.desc()).limit(500).all()
 
     if annonces:
         df_inf = pd.DataFrame([{
-            "Source":      a.source,
-            "Produit":     (a.produit or "")[:60],
-            "Prix (XOF)":  a.prix_unitaire,
-            "Zone":        a.vendeur_zone or "",
-            "Type":        a.type or "",
-            "Contact":     "✅" if a.contact_disponible else "❌",
-            "Date":        a.date_collecte.strftime("%d/%m/%Y") if a.date_collecte else "",
+            "Source":     a.source,
+            "Produit":    (a.produit or "")[:60],
+            "Prix (XOF)": a.prix_unitaire,
+            "Zone":       a.vendeur_zone or "",
+            "Type":       a.type or "",
+            "Contact":    "✅" if a.contact_disponible else "❌",
+            "Date":       a.date_collecte.strftime("%d/%m/%Y") if a.date_collecte else "",
         } for a in annonces])
-
-        st.dataframe(df_inf, use_container_width=True, hide_index=True, height=300)
+        st.dataframe(df_inf, use_container_width=True, hide_index=True, height=250)
 
         col_g1, col_g2 = st.columns(2)
         with col_g1:
-            st.subheader("Activité par zone")
-            zone_count = df_inf["Zone"].value_counts()
-            if not zone_count.empty:
-                st.bar_chart(zone_count)
+            zone_c = df_inf["Zone"].value_counts()
+            fig_z = px.bar(zone_c, orientation="h", title="Activité par zone",
+                           color_discrete_sequence=["#1565c0"])
+            fig_z.update_layout(height=280, margin=dict(t=30,b=10))
+            st.plotly_chart(fig_z, use_container_width=True)
         with col_g2:
-            st.subheader("Activité par source")
-            src_inf = df_inf["Source"].value_counts()
-            if not src_inf.empty:
-                st.bar_chart(src_inf)
-
+            src_c = df_inf["Source"].value_counts()
+            fig_src = px.pie(src_c, values=src_c.values, names=src_c.index,
+                             hole=0.4, title="Par source")
+            fig_src.update_layout(height=280, margin=dict(t=30,b=10))
+            st.plotly_chart(fig_src, use_container_width=True)
     else:
-        st.info("Aucune annonce informel. Activer Jotay/CoinAfrique dans config.yaml et lancer `python main.py scrape --source informel`")
+        st.info("Lancer : `python main.py scrape --source informel`")
 
-    # Fiches marchés
     st.divider()
-    st.subheader("📍 Fiches marchés")
-    zones_cfg = config.get("geo", {}).get("zones_informel", [])
-    cols_m = st.columns(min(len(zones_cfg), 3))
-    for i, z in enumerate(zones_cfg):
-        with cols_m[i % 3]:
-            nb_ann = sum(1 for a in annonces if a.vendeur_zone == z.get("nom", ""))
-            puissance = z.get("puissance_estimee", "")
-            emoji = "🔥" if puissance == "très haute" else ("⚡" if puissance == "haute" else "📍")
-            st.markdown(f"""
-**{emoji} {z.get('nom', '')}** — {z.get('ville', '')}
-Spécialités : {', '.join(z.get('specialites', []))}
-Puissance : *{puissance}*
-Annonces actives : **{nb_ann}**
-""")
-
-    # Saisie terrain manuelle
-    st.divider()
-    st.subheader("📝 Saisie terrain manuelle")
+    st.subheader("📝 Saisie terrain")
     with st.form("form_informel"):
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            produit_t   = st.text_input("Produit")
-            marque_t    = st.text_input("Marque")
-            zone_t      = st.selectbox("Zone", [z.get("nom", "") for z in zones_cfg] + ["Autre"])
-            type_t      = st.selectbox("Type", ["offre", "demande"])
-        with col_f2:
-            quantite_t  = st.number_input("Quantité", min_value=1, value=1)
-            prix_t      = st.number_input("Prix unitaire (XOF)", min_value=0, value=0)
-            contact_t   = st.checkbox("Contact disponible")
-            notes_t     = st.text_area("Notes terrain")
-
-        if st.form_submit_button("✅ Enregistrer") and produit_t:
-            from src.database.models import AnnoncInformel as AI
-            ann = AI(
-                source="Terrain",
-                date_collecte=datetime.utcnow(),
-                type=type_t,
-                produit=produit_t,
-                marque=marque_t,
-                quantite_disponible=quantite_t,
+        c1, c2 = st.columns(2)
+        with c1:
+            prod_t  = st.text_input("Produit *")
+            zone_t  = st.selectbox("Zone", [z.get("nom","") for z in config.get("geo",{}).get("zones_informel",[])] + ["Autre"])
+            type_t  = st.selectbox("Type", ["offre", "demande"])
+        with c2:
+            prix_t  = st.number_input("Prix (XOF)", min_value=0, value=0)
+            qte_t   = st.number_input("Quantité", min_value=1, value=1)
+            notes_t = st.text_area("Notes", height=80)
+        if st.form_submit_button("✅ Enregistrer") and prod_t:
+            ann = AnnoncInformel(
+                source="Terrain", date_collecte=datetime.utcnow(),
+                type=type_t, produit=prod_t,
                 prix_unitaire=prix_t if prix_t > 0 else None,
-                devise="XOF",
-                vendeur_zone=zone_t,
-                contact_disponible=contact_t,
-                notes_terrain=notes_t,
+                devise="XOF", vendeur_zone=zone_t,
+                quantite_disponible=qte_t,
+                contact_disponible=True, notes_terrain=notes_t,
             )
             session.add(ann)
             session.commit()
-            st.success(f"✅ {produit_t} enregistré !")
+            st.success(f"✅ {prod_t} enregistré !")
             st.rerun()
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB 4 — RÉSEAU
+# TAB 6 — RÉSEAU
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-with tab4:
+with tab6:
     st.header("🤝 Réseau Fournisseurs & Acteurs")
 
-    # KPIs réseau
     total_ent = session.query(Entreprise).count()
     k1, k2, k3 = st.columns(3)
     k1.metric("Entreprises", total_ent)
-    k2.metric("Pays couverts", len(_get_distinct(session, Entreprise.pays)))
+    k2.metric("Pays", len(_get_distinct(session, Entreprise.pays)))
     k3.metric("Secteurs", len(_get_distinct(session, Entreprise.secteur)))
-
-    st.divider()
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        filtre_type_ent = st.selectbox("Type", ["Tous"] + _get_distinct(session, Entreprise.type))
+        f_type_ent = st.selectbox("Type", ["Tous"] + _get_distinct(session, Entreprise.type))
     with col2:
-        filtre_secteur = st.selectbox("Secteur", ["Tous"] + _get_distinct(session, Entreprise.secteur))
+        f_sect_ent = st.selectbox("Secteur", ["Tous"] + _get_distinct(session, Entreprise.secteur))
     with col3:
-        filtre_pays_ent = st.selectbox("Pays", ["Tous"] + _get_distinct(session, Entreprise.pays), key="ent_pays")
+        f_pays_ent = st.selectbox("Pays", ["Tous"] + _get_distinct(session, Entreprise.pays), key="ent_pays")
 
     q_ent = session.query(Entreprise)
-    if filtre_type_ent != "Tous":  q_ent = q_ent.filter(Entreprise.type == filtre_type_ent)
-    if filtre_secteur != "Tous":   q_ent = q_ent.filter(Entreprise.secteur == filtre_secteur)
-    if filtre_pays_ent != "Tous":  q_ent = q_ent.filter(Entreprise.pays == filtre_pays_ent)
-
+    if f_type_ent != "Tous": q_ent = q_ent.filter(Entreprise.type == f_type_ent)
+    if f_sect_ent != "Tous": q_ent = q_ent.filter(Entreprise.secteur == f_sect_ent)
+    if f_pays_ent != "Tous": q_ent = q_ent.filter(Entreprise.pays == f_pays_ent)
     entreprises = q_ent.order_by(Entreprise.nom).limit(500).all()
 
     if entreprises:
         df_ent = pd.DataFrame([{
-            "Nom":      e.nom,
-            "Secteur":  e.secteur or "",
-            "Type":     e.type or "",
-            "Pays":     e.pays or "",
-            "Ville":    e.ville or "",
-            "Taille":   e.taille_estimee or "",
-            "Contact":  e.contact or "",
-            "Source":   e.source or "",
+            "Nom":     e.nom, "Secteur": e.secteur or "",
+            "Type":    e.type or "", "Pays": e.pays or "",
+            "Ville":   e.ville or "", "Contact": e.contact or "",
         } for e in entreprises])
-
         st.dataframe(df_ent, use_container_width=True, hide_index=True, height=300)
 
         col_g1, col_g2 = st.columns(2)
         with col_g1:
-            st.subheader("Par type")
-            st.bar_chart(df_ent["Type"].value_counts())
+            vc = df_ent["Type"].value_counts()
+            fig_t = px.pie(vc, values=vc.values, names=vc.index,
+                           hole=0.3, title="Par type")
+            fig_t.update_layout(height=280, margin=dict(t=30,b=10))
+            st.plotly_chart(fig_t, use_container_width=True)
         with col_g2:
-            st.subheader("Par secteur")
-            st.bar_chart(df_ent["Secteur"].value_counts().head(10))
-
+            top_s = df_ent["Secteur"].value_counts().head(10)
+            fig_s = px.bar(top_s, orientation="h", title="Top secteurs",
+                           color_discrete_sequence=["#1565c0"])
+            fig_s.update_layout(height=280, margin=dict(t=30,b=10))
+            st.plotly_chart(fig_s, use_container_width=True)
     else:
-        st.info("Aucune entreprise. À enrichir via le formulaire ci-dessous ou via scraping annuaires.")
+        st.info("Lancer `python main.py scrape --source annuaires` ou ajouter manuellement.")
 
     st.divider()
     st.subheader("➕ Ajouter une entreprise")
-    with st.form("form_entreprise"):
+    with st.form("form_ent"):
         c1, c2 = st.columns(2)
         with c1:
-            nom_e     = st.text_input("Nom de l'entreprise *")
+            nom_e     = st.text_input("Nom *")
             secteur_e = st.text_input("Secteur")
-            type_e    = st.selectbox("Type", ["fournisseur", "distributeur", "importateur", "exportateur", "logisticien", "autre"])
+            type_e    = st.selectbox("Type", ["fournisseur","distributeur","importateur","exportateur","logisticien","autre"])
             pays_e    = st.selectbox("Pays", config["geo"]["pays_prioritaires"])
         with c2:
             ville_e   = st.text_input("Ville")
-            taille_e  = st.selectbox("Taille estimée", ["petite", "moyenne", "grande", "très grande"])
-            contact_e = st.text_input("Contact (email / tél)")
-            notes_e   = st.text_area("Notes")
-
+            taille_e  = st.selectbox("Taille", ["petite","moyenne","grande","très grande"])
+            contact_e = st.text_input("Contact")
+            notes_e   = st.text_area("Notes", height=80)
         if st.form_submit_button("Enregistrer") and nom_e:
-            from src.database.models import Entreprise as Ent
-            ent = Ent(nom=nom_e, secteur=secteur_e, type=type_e, pays=pays_e,
-                      ville=ville_e, taille_estimee=taille_e, contact=contact_e,
-                      notes=notes_e, source="Manuel")
+            ent = Entreprise(nom=nom_e, secteur=secteur_e, type=type_e, pays=pays_e,
+                             ville=ville_e, taille_estimee=taille_e, contact=contact_e,
+                             notes=notes_e, source="Manuel")
             session.add(ent)
             session.commit()
             st.success(f"✅ {nom_e} ajouté !")
             st.rerun()
 
-    # Import CSV entreprises
     st.divider()
-    st.subheader("📂 Import CSV entreprises")
-    uploaded = st.file_uploader("CSV avec colonnes: nom, secteur, type, pays, ville, contact", type="csv")
+    uploaded = st.file_uploader("📂 Import CSV (nom, secteur, type, pays, ville, contact)", type="csv")
     if uploaded:
         try:
-            df_upload = pd.read_csv(uploaded)
-            nb_import = 0
-            for _, row in df_upload.iterrows():
-                from src.database.models import Entreprise as Ent
-                ent = Ent(
-                    nom=str(row.get("nom", "")),
-                    secteur=str(row.get("secteur", "")),
-                    type=str(row.get("type", "autre")),
-                    pays=str(row.get("pays", "Sénégal")),
-                    ville=str(row.get("ville", "")),
-                    contact=str(row.get("contact", "")),
+            df_up = pd.read_csv(uploaded)
+            nb = 0
+            for _, row in df_up.iterrows():
+                ent = Entreprise(
+                    nom=str(row.get("nom","")), secteur=str(row.get("secteur","")),
+                    type=str(row.get("type","autre")), pays=str(row.get("pays","Sénégal")),
+                    ville=str(row.get("ville","")), contact=str(row.get("contact","")),
                     source="Import CSV",
                 )
                 session.add(ent)
-                nb_import += 1
+                nb += 1
             session.commit()
-            st.success(f"✅ {nb_import} entreprises importées !")
+            st.success(f"✅ {nb} entreprises importées !")
             st.rerun()
         except Exception as e:
-            st.error(f"Erreur import : {e}")
+            st.error(f"Erreur : {e}")

@@ -1,5 +1,8 @@
 # Secrets
 config/.env
+.streamlit/secrets.toml
+tunnel.log
+*.log
 
 # Base de données locale
 data/intelligence.db

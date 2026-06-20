@@ -46,7 +46,11 @@ def cmd_init(config):
 def cmd_scrape(config, source_filter=None):
     from src.scrapers import jumia, auchan
     from src.scrapers import facebook_marketplace, jotay, coinafrique
+    from src.scrapers import expat_dakar, olx_senegal, dakarois, europages, telegram_channels
+    from src.scrapers import coinafrique_pw, olx_pw, facebook_pw
     from src.scrapers.ao import dcmp, ungm, dgmarket, banque_mondiale, bad
+    from src.scrapers.macro import comtrade, world_bank, bceao
+    from src.scrapers.annuaires import kompass
 
     sources_ao = [
         ("ao", dcmp),
@@ -55,22 +59,29 @@ def cmd_scrape(config, source_filter=None):
         ("ao", banque_mondiale),
         ("ao", bad),
     ]
-    from src.scrapers.macro import comtrade
-
     sources_ecommerce = [
         ("ecommerce", jumia),
         ("ecommerce", auchan),
     ]
     sources_macro = [
         ("macro", comtrade),
+        ("macro", world_bank),
+        ("macro", bceao),
     ]
     sources_informel = [
-        ("informel", facebook_marketplace),
-        ("informel", jotay),
-        ("informel", coinafrique),
+        ("informel", expat_dakar),
+        ("informel", dakarois),
+        ("informel", telegram_channels),
+        ("informel", coinafrique_pw),   # Playwright
+        ("informel", olx_pw),           # Playwright
+        ("informel", facebook_pw),      # Playwright + profil Chrome
+    ]
+    sources_annuaires = [
+        ("annuaires", kompass),
+        ("annuaires", europages),
     ]
 
-    all_sources = sources_ao + sources_ecommerce + sources_informel + sources_macro
+    all_sources = sources_ao + sources_ecommerce + sources_informel + sources_macro + sources_annuaires
     if source_filter:
         all_sources = [(t, m) for t, m in all_sources if t == source_filter]
 
@@ -197,7 +208,7 @@ def main():
     )
     parser.add_argument(
         "--source",
-        choices=["ao", "ecommerce", "informel", "macro"],
+        choices=["ao", "ecommerce", "informel", "macro", "annuaires"],
         help="Filtre source pour scrape",
     )
     parser.add_argument(

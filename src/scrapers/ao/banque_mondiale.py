@@ -15,7 +15,7 @@ from src.database.db import upsert_ao
 logger = logging.getLogger(__name__)
 _SOURCE_NOM = "Banque Mondiale"
 
-_API_URL = "https://search.worldbank.org/api/v2/procurement"
+_API_URL = "https://search.worldbank.org/api/v2/projects"
 _COUNTRY_CODES = {
     "Sénégal": "SN", "Côte d'Ivoire": "CI", "Mali": "ML",
     "Burkina Faso": "BF", "Guinée": "GN", "Togo": "TG",
@@ -47,11 +47,12 @@ class BanqueMondialeScraper(BaseScraper):
                 continue
 
             params = {
-                "format":       "json",
-                "country_code": code,
-                "strdate":      "2024-01-01",
-                "rows":         50,
-                "os":           0,
+                "format":      "json",
+                "countrycode": code,
+                "strdate":     "2024-01-01",
+                "rows":        50,
+                "os":          0,
+                "fl":          "id,project_name,countryname,boardapprovaldate,closingdate,totalamt,url,status",
             }
 
             try:
@@ -66,13 +67,21 @@ class BanqueMondialeScraper(BaseScraper):
                     continue
 
                 data = resp.json()
-                notices = data.get("procnotices", {}).get("procnotice", [])
-                if isinstance(notices, dict):
-                    notices = [notices]
+                if data.get("error"):
+                    logger.warning(f"BM API {pays_nom}: {data['error']}")
+                    continue
+                # Clé peut être "projects" (list) ou "projects":{...}
+                raw = data.get("projects", {})
+                if isinstance(raw, dict):
+                    projects = list(raw.values())
+                elif isinstance(raw, list):
+                    projects = raw
+                else:
+                    projects = []
 
-                logger.info(f"BM {pays_nom}: {len(notices)} notices")
+                logger.info(f"BM {pays_nom}: {len(projects)} projets")
 
-                for n in notices:
+                for n in projects:
                     item = self._parse(n, pays_nom)
                     if item:
                         yield item
@@ -84,11 +93,12 @@ class BanqueMondialeScraper(BaseScraper):
 
     def _parse(self, n: dict, pays_nom: str) -> dict | None:
         try:
-            objet = n.get("project_name", "") or n.get("noticetext", "")[:200]
-            ref   = n.get("noticeno", f"BM_{hash(objet) & 0xFFFFFF:06X}")
+            objet = n.get("project_name", "") or n.get("lendinginstr", "")
+            objet = (objet or "")[:200]
+            ref   = n.get("id", f"BM_{hash(objet) & 0xFFFFFF:06X}")
 
-            date_pub = _parse_bm_date(n.get("publishdate"))
-            date_lim = _parse_bm_date(n.get("deadline"))
+            date_pub = _parse_bm_date(n.get("boardapprovaldate"))
+            date_lim = _parse_bm_date(n.get("closingdate"))
 
             jours = None
             if date_lim:
@@ -107,7 +117,7 @@ class BanqueMondialeScraper(BaseScraper):
                 "jours_restants":   jours,
                 "reference":        ref,
                 "objet":            objet,
-                "entite":           n.get("borrower", ""),
+                "entite":           _str_val(n.get("borrower") or n.get("countryname", "")),
                 "pays":             pays_nom,
                 "ville":            "",
                 "budget_estime":    budget,
@@ -123,6 +133,12 @@ class BanqueMondialeScraper(BaseScraper):
 
     def save_item(self, item: dict) -> bool:
         return upsert_ao(self.session_db, item)
+
+
+def _str_val(v) -> str:
+    if isinstance(v, list):
+        return v[0] if v else ""
+    return str(v) if v else ""
 
 
 def _parse_bm_date(s: str | None) -> datetime | None:

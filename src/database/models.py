@@ -133,6 +133,41 @@ class LogCollecte(Base):
         return f"<Log {self.source_nom} {self.statut} — {self.nb_items} items>"
 
 
+class DonneeMacro(Base):
+    """Indicateurs économiques macro (World Bank, BCEAO, ANSD)."""
+    __tablename__ = "donnees_macro"
+
+    id            = Column(String(36), primary_key=True, default=_uuid)
+    source        = Column(String(100), nullable=False, index=True)
+    date_collecte = Column(DateTime, default=datetime.utcnow)
+    pays          = Column(String(100), index=True)
+    indicateur    = Column(String(200), index=True)
+    code_wdi      = Column(String(50))   # code World Bank (ex: NY.GDP.MKTP.CD)
+    annee         = Column(Integer, index=True)
+    valeur        = Column(Float)
+    unite         = Column(String(50))
+    categorie     = Column(String(100))  # PIB, Inflation, Commerce, Emploi, etc.
+    url_source    = Column(String(500))
+    notes         = Column(Text)
+
+
+class EtudeConjoncture(Base):
+    """Rapports et études économiques scrapées (BCEAO, ANSD, IMF, BM)."""
+    __tablename__ = "etudes_conjoncture"
+
+    id            = Column(String(36), primary_key=True, default=_uuid)
+    source        = Column(String(100), nullable=False)
+    date_collecte = Column(DateTime, default=datetime.utcnow)
+    date_publication = Column(DateTime)
+    titre         = Column(String(500))
+    resume        = Column(Text)
+    pays          = Column(String(200))
+    themes        = Column(String(500))   # JSON list
+    url_source    = Column(String(500))
+    url_pdf       = Column(String(500))
+    langue        = Column(String(20), default="fr")
+
+
 def get_engine(config: dict):
     """Crée le moteur SQLAlchemy selon la config (sqlite ou postgresql)."""
     db_config = config.get("database", {})
