@@ -1,0 +1,25 @@
+# Secrets
+config/.env
+
+# Base de données locale
+data/intelligence.db
+data/*.db
+
+# Exports et logs
+exports/
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Playwright
+playwright/.local-browsers/
+
+# OS
+.DS_Store
+Thumbs.db

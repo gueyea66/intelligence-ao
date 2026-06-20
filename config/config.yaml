@@ -1,0 +1,187 @@
+# config.yaml — Fichier maître de configuration
+# Toute valeur métier vit ici. Rien n'est hardcodé dans le code.
+
+geo:
+  pays_prioritaires: ["Sénégal", "Côte d'Ivoire", "Mali", "Burkina Faso"]
+  pays_secondaires: ["Guinée", "Togo", "Bénin", "Niger"]
+  zones_informel:
+    - nom: "Sandaga"
+      ville: "Dakar"
+      specialites: ["Textile", "Électronique", "Import Asie"]
+      puissance_estimee: "très haute"
+    - nom: "Colobane"
+      ville: "Dakar"
+      specialites: ["Pièces détachées", "Électroménager", "Matériaux"]
+      puissance_estimee: "haute"
+    - nom: "Marché HLM"
+      ville: "Dakar"
+      specialites: ["Tissus", "Couture", "Accessoires"]
+      puissance_estimee: "haute"
+    - nom: "Tilène"
+      ville: "Dakar"
+      specialites: ["Alimentation", "Produits locaux"]
+      puissance_estimee: "moyenne"
+    - nom: "Touba"
+      ville: "Touba"
+      specialites: ["Commerce général", "Import", "Distribution nationale"]
+      puissance_estimee: "très haute"
+
+secteurs:
+  actifs: []   # vide = tous les secteurs
+  exclus: []
+
+sources:
+  ecommerce:
+    - nom: "Jumia Sénégal"
+      url: "https://www.jumia.sn"
+      actif: true
+      frequence: "hebdomadaire"
+      delai_entre_requetes: 2       # secondes
+      max_pages: 50
+      categories_url: "https://www.jumia.sn/catalog/"
+
+    - nom: "Auchan Sénégal"
+      url: "https://www.auchan.sn"
+      actif: true
+      frequence: "hebdomadaire"
+      delai_entre_requetes: 3
+      max_pages: 30
+
+    - nom: "Facebook Marketplace Dakar"
+      url: "https://www.facebook.com/marketplace/dakar"
+      actif: true
+      frequence: "quotidien"
+      delai_entre_requetes: 5
+      max_pages: 20
+
+    - nom: "Jotay"
+      url: "https://www.jotay.net"
+      actif: true
+      frequence: "quotidien"
+      delai_entre_requetes: 2
+      max_pages: 20
+
+    - nom: "CoinAfrique Sénégal"
+      url: "https://sn.coinafrique.com"
+      actif: true
+      frequence: "quotidien"
+      delai_entre_requetes: 2
+      max_pages: 20
+
+    - nom: "Auchan Sénégal"
+      url: "https://www.auchan.sn"
+      actif: true
+      frequence: "hebdomadaire"
+      delai_entre_requetes: 3
+      max_pages: 30
+
+  appels_offres:
+    - nom: "DCMP Sénégal"
+      url: "https://www.dcmp.sn"
+      actif: true
+      frequence: "quotidien"
+      delai_entre_requetes: 3
+
+    - nom: "UNGM"
+      url: "https://www.ungm.org"
+      actif: true
+      frequence: "quotidien"
+      delai_entre_requetes: 3
+
+    - nom: "DgMarket"
+      url: "https://www.dgmarket.com"
+      actif: true
+      frequence: "quotidien"
+      delai_entre_requetes: 3
+
+    - nom: "Banque Mondiale"
+      url: "https://projects.worldbank.org"
+      actif: true
+      frequence: "hebdomadaire"
+      delai_entre_requetes: 5
+
+    - nom: "BAD"
+      url: "https://www.afdb.org"
+      actif: true
+      frequence: "hebdomadaire"
+      delai_entre_requetes: 5
+
+    - nom: "DGMP Mali"
+      url: "http://www.dgmp.gov.ml"
+      actif: false
+      frequence: "quotidien"
+      delai_entre_requetes: 3
+
+    - nom: "DGF Côte d'Ivoire"
+      url: "https://dgf.gouv.ci"
+      actif: false
+      frequence: "quotidien"
+      delai_entre_requetes: 3
+
+  macro:
+    - nom: "UN Comtrade"
+      url: "https://comtradeplus.un.org"
+      actif: true
+      frequence: "mensuel"
+      delai_entre_requetes: 5
+
+    - nom: "ITC Trade Map"
+      url: "https://www.trademap.org"
+      actif: true
+      frequence: "mensuel"
+      delai_entre_requetes: 5
+
+    - nom: "ANSD Sénégal"
+      url: "https://www.ansd.sn"
+      actif: true
+      frequence: "trimestriel"
+      delai_entre_requetes: 3
+
+scoring:
+  poids:
+    pertinence_sectorielle: 25
+    taille_marche: 20
+    delai_reponse: 15
+    accessibilite_geo: 15
+    disponibilite_fournisseur: 15
+    niveau_concurrence: 10
+  seuils:
+    priorite_haute: 70
+    a_surveiller: 40
+    archiver: 0
+  positionnements:
+    - SOURCING
+    - LOGISTIQUE
+    - INTERMÉDIATION
+    - FORMALISATION
+    - FINANCEMENT
+    - DIRECT
+
+alertes:
+  canaux: ["email"]          # "email" | "whatsapp"
+  email: ""                  # à configurer dans .env : ALERT_EMAIL
+  whatsapp: ""               # à configurer dans .env : ALERT_WHATSAPP
+  frequence_digest: "quotidien"
+  score_minimum_alerte: 70
+
+database:
+  type: "sqlite"             # "sqlite" | "postgresql"
+  sqlite_path: "./data/intelligence.db"
+  postgresql_url: ""         # à configurer dans .env : DATABASE_URL
+
+export:
+  formats: ["csv", "json", "excel"]
+  format_defaut: "excel"
+  dossier_sortie: "./exports"
+
+scraping:
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+  timeout: 30                # secondes
+  max_retries: 3
+  delai_retry: 10            # secondes entre tentatives
+
+logging:
+  niveau: "INFO"             # DEBUG | INFO | WARNING | ERROR
+  dossier: "./logs"
+  rotation: "quotidien"
+  retention_jours: 30
