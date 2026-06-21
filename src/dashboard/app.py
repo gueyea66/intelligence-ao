@@ -128,7 +128,10 @@ def load_macro_df():
 
 
 config  = get_config()
-session = get_db_session()
+try:
+    session = get_db_session()
+except Exception:
+    session = None
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -136,14 +139,17 @@ with st.sidebar:
     st.caption("Afrique de l'Ouest — Sprint 4")
     st.divider()
 
-    stats = stats_summary(config)
-    c1, c2 = st.columns(2)
-    with c1:
-        st.metric("Produits", f"{stats['nb_produits']:,}")
-        st.metric("AOs actifs", stats["nb_aos_actifs"])
-    with c2:
-        st.metric("🔴 Prioritaires", stats["ao_prioritaires"])
-        st.metric("Informel", stats["nb_informel"])
+    try:
+        stats = stats_summary(config)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.metric("Produits", f"{stats['nb_produits']:,}")
+            st.metric("AOs actifs", stats["nb_aos_actifs"])
+        with c2:
+            st.metric("🔴 Prioritaires", stats["ao_prioritaires"])
+            st.metric("Informel", stats["nb_informel"])
+    except Exception:
+        st.info("Base de données non connectée — configurez DATABASE_URL dans Secrets.")
 
     st.divider()
     if st.button("🔄 Rafraîchir tout"):
