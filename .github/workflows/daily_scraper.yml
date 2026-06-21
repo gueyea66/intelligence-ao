@@ -1,0 +1,173 @@
+name: Intelligence AO — Scraping Pipeline
+
+on:
+  schedule:
+    # Run 1 : 06h00 UTC = 06h00 Dakar (pic matin, avant travail)
+    - cron: '0 6 * * *'
+    # Run 2 : 18h00 UTC = 18h00 Dakar (pic soir, après travail)
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Cible (all | market | social | documents | recategorize)'
+        required: false
+        default: 'all'
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────
+  # JOB 1 — Marché : Jumia, AOs, données macro
+  # ─────────────────────────────────────────────────────────────────────
+  market:
+    name: Scraping Marché
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: ${{ github.event.inputs.target == 'all' || github.event.inputs.target == 'market' || github.event_name == 'schedule' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt --quiet
+
+      - name: Scraping marché (Jumia, AOs)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python main.py --mode scrape
+        continue-on-error: true
+
+      - name: Recatégorisation produits
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/run_recategorization.py apply
+        continue-on-error: true
+
+      - name: Catégorisation informel
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/categorize_informel.py
+        continue-on-error: true
+
+  # ─────────────────────────────────────────────────────────────────────
+  # JOB 2 — Social Intelligence : Telegram + Facebook + WhatsApp
+  # ─────────────────────────────────────────────────────────────────────
+  social:
+    name: Scraping Social
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: ${{ github.event.inputs.target == 'all' || github.event.inputs.target == 'social' || github.event_name == 'schedule' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install Python deps
+        run: pip install -r requirements.txt telethon beautifulsoup4 --quiet
+
+      - name: Telegram — canaux publics AO
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+          TELEGRAM_SESSION_STRING: ${{ secrets.TELEGRAM_SESSION_STRING }}
+        run: python scripts/run_social_scraper.py telegram
+        continue-on-error: true
+
+      - name: Facebook — pages publiques + recherches
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/run_social_scraper.py facebook
+        continue-on-error: true
+
+      - name: WhatsApp — groupes commerce
+        if: ${{ secrets.WHATSAPP_CREDS_JSON != '' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WHATSAPP_CREDS_JSON: ${{ secrets.WHATSAPP_CREDS_JSON }}
+          DAYS_BACK: '1'
+        run: |
+          cd src/scrapers/social/whatsapp_scraper
+          npm ci --quiet
+          node scraper.js
+        continue-on-error: true
+
+  # ─────────────────────────────────────────────────────────────────────
+  # JOB 3 — Documents institutionnels (UN, BM, ANSD, BCEAO)
+  # Une fois par jour seulement (run du soir, 18h)
+  # ─────────────────────────────────────────────────────────────────────
+  documents:
+    name: Documents Institutionnels
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: |
+      github.event.inputs.target == 'all' ||
+      github.event.inputs.target == 'documents' ||
+      (github.event_name == 'schedule' && contains(github.event.schedule, '18'))
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install deps (avec pdfplumber)
+        run: pip install -r requirements.txt pdfplumber --quiet
+
+      - name: Scraping documents BM + ANSD + BCEAO + UN
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          UN_COMTRADE_API_KEY: ${{ secrets.UN_COMTRADE_API_KEY }}
+        run: python scripts/run_doc_scraper.py
+        continue-on-error: true
+
+  # ─────────────────────────────────────────────────────────────────────
+  # JOB 4 — Notification Telegram (toujours, après les jobs)
+  # ─────────────────────────────────────────────────────────────────────
+  notify:
+    name: Notification
+    runs-on: ubuntu-latest
+    needs: [market, social, documents]
+    if: always()
+
+    steps:
+      - name: Résumé et notification Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MARKET_STATUS: ${{ needs.market.result }}
+          SOCIAL_STATUS: ${{ needs.social.result }}
+          DOC_STATUS: ${{ needs.documents.result }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then exit 0; fi
+
+          STATUS_MARKET="✅"
+          STATUS_SOCIAL="✅"
+          STATUS_DOCS="✅"
+          [ "$MARKET_STATUS" = "failure" ] && STATUS_MARKET="❌"
+          [ "$SOCIAL_STATUS" = "failure" ] && STATUS_SOCIAL="❌"
+          [ "$DOC_STATUS" = "failure" ] && STATUS_DOCS="❌"
+          [ "$MARKET_STATUS" = "skipped" ] && STATUS_MARKET="⏭️"
+          [ "$SOCIAL_STATUS" = "skipped" ] && STATUS_SOCIAL="⏭️"
+          [ "$DOC_STATUS" = "skipped" ] && STATUS_DOCS="⏭️"
+
+          MSG="<b>Intelligence AO — Run $(date '+%d/%m/%Y %H:%M') UTC</b>%0A%0A"
+          MSG="${MSG}${STATUS_MARKET} Marché | ${STATUS_SOCIAL} Social | ${STATUS_DOCS} Documents%0A%0A"
+          MSG="${MSG}🔗 Dashboard: https://intelligence-ao-web.vercel.app"
+
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d parse_mode="HTML" \
+            -d text="${MSG}"

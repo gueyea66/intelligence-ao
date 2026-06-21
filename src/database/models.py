@@ -8,6 +8,7 @@ from datetime import datetime
 from sqlalchemy import (
     Boolean, Column, DateTime, Float, Integer, String, Text, create_engine
 )
+from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import DeclarativeBase, Session
 
 
@@ -90,6 +91,7 @@ class AnnoncInformel(Base):
     contact_disponible  = Column(Boolean, default=False)
     url_annonce         = Column(Text)
     notes_terrain       = Column(Text)
+    categorie_detectee  = Column(String(100), index=True)
     donnees_brutes      = Column(Text)
 
     def __repr__(self) -> str:
@@ -175,11 +177,11 @@ def get_engine(config: dict):
 
     if db_type == "postgresql":
         url = db_config["postgresql_url"]
+        return create_engine(url, echo=False, poolclass=NullPool)
     else:
         path = db_config.get("sqlite_path", "./data/intelligence.db")
         url = f"sqlite:///{path}"
-
-    return create_engine(url, echo=False)
+        return create_engine(url, echo=False)
 
 
 def init_db(config: dict) -> None:
