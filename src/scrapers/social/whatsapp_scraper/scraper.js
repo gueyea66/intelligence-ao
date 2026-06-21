@@ -19,7 +19,10 @@ const SESSION_PATH = path.join(__dirname, 'session_data');
 const LINKS_FILE = path.join(__dirname, 'known_group_links.json');
 const JOINED_FILE = path.join(__dirname, 'joined_groups.json');
 
-// Scraper TOUS les groupes rejoints (pas de filtre par nom — les groupes viennent déjà de liens commerce)
+// Mots-clés qui déclenchent un départ automatique (spam confirmé)
+const SPAM_KEYWORDS = /cricket|dream\s*11|ipl|betting|earn\s*\$|crypto|bitcoin|forex|trading|porn|sex|adult|escort|18\+|loan\s*offer|investment.*%|ponzi/i;
+
+// Scraper tous les groupes non-spam
 const COMMERCE_KEYWORDS = /.*/;
 const MUTE_DURATION = 365 * 24 * 3600; // 1 an en secondes
 
@@ -172,13 +175,28 @@ async function run() {
       // 2. Récupérer tous les groupes actuels
       const allGroups = Object.values(await sock.groupFetchAllParticipating());
 
-      // 3. Muter tous les groupes (nouveaux + existants non mutés)
-      const allIds = allGroups.map(g => g.id);
+      // 2b. Quitter automatiquement les groupes spam
+      let leftCount = 0;
+      for (const g of allGroups) {
+        if (SPAM_KEYWORDS.test(g.subject || '')) {
+          try {
+            await sock.groupLeave(g.id);
+            console.log(`Quitté (spam): ${g.subject}`);
+            leftCount++;
+            await new Promise(r => setTimeout(r, 800));
+          } catch (e) { /* ignorer */ }
+        }
+      }
+      if (leftCount > 0) console.log(`${leftCount} groupes spam quittés automatiquement`);
+
+      // 3. Muter tous les groupes restants
+      const cleanGroups = allGroups.filter(g => !SPAM_KEYWORDS.test(g.subject || ''));
+      const allIds = cleanGroups.map(g => g.id);
       await muteGroups(sock, allIds);
       console.log(`${allIds.length} groupes mutés`);
 
-      // 4. Filtrer groupes commerce
-      const commerceGroups = allGroups.filter(g => COMMERCE_KEYWORDS.test(g.subject));
+      // 4. Filtrer groupes commerce (parmi les groupes non-spam)
+      const commerceGroups = cleanGroups.filter(g => COMMERCE_KEYWORDS.test(g.subject));
       console.log(`${commerceGroups.length} groupes commerce détectés`);
 
       // 5. Scraper messages
