@@ -193,10 +193,10 @@ async function run() {
           const msgs = messageBuffer.get(group.id) || [];
           console.log(`  ${group.subject}: ${msgs.length} messages`);
           for (const msg of msgs) {
-            if (!msg.message || msg.key.fromMe) continue;
-            const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-            if (!text || text.length < 10) continue;
-            const ts = (msg.messageTimestamp || 0) * 1000;
+            if (!msg.message) continue;
+            const text = msg.message.conversation || msg.message.extendedTextMessage?.text || msg.message.imageMessage?.caption || '';
+            if (!text || text.length < 5) continue;
+            const ts = (Number(msg.messageTimestamp) || Math.floor(Date.now()/1000)) * 1000;
             if (ts < since) continue;
 
             const nlp = analyzeText(text);
