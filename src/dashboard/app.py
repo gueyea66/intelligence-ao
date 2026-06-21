@@ -72,11 +72,7 @@ def get_db_session():
     if db_url and db_url.startswith("postgresql"):
         from sqlalchemy import create_engine
         engine = create_engine(db_url, pool_pre_ping=True,
-                               connect_args={"connect_timeout": 10})
-        try:
-            Base.metadata.create_all(engine)
-        except Exception:
-            pass
+                               connect_args={"connect_timeout": 8})
         Session = sessionmaker(bind=engine)
         return Session()
     session = get_session(cfg)
