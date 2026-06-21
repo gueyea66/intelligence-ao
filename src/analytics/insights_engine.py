@@ -175,20 +175,21 @@ def tendance_prix(prix_dates: list[tuple]) -> dict:
 
 # ── Runner principal ──────────────────────────────────────────────────────────
 
-def generer_insights(config: dict) -> dict:
+def generer_insights(config: dict, session=None) -> dict:
     """
     Génère l'ensemble des insights pour le dashboard.
     Retourne un dict structuré par thème.
     """
     from src.database.models import get_session, Produit, AppelOffre
-    session = get_session(config)
+    if session is None:
+        session = get_session(config)
 
     # ── Produits par catégorie ────────────────────────────────────────────────
     produits = session.query(Produit).filter(
         Produit.prix_actuel.isnot(None),
         Produit.prix_actuel > 0,
         Produit.prix_actuel < 50_000_000,
-    ).all()
+    ).limit(3000).all()
 
     # Stats par catégorie
     par_cat = {}

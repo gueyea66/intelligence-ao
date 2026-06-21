@@ -121,7 +121,7 @@ def load_produits_df():
 def load_insights():
     try:
         from src.analytics.insights_engine import generer_insights
-        return generer_insights(get_config())
+        return generer_insights(get_config(), session=get_db_session())
     except Exception:
         return {"nb_produits": 0, "distribution_cats": {}, "nb_anomalies": 0,
                 "entropie_marche": 0.0, "nb_sources": 0, "stats_categories": {},
