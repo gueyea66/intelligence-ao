@@ -54,7 +54,7 @@ def get_config():
         for k, v in st.secrets.items():
             if isinstance(v, str):
                 os.environ.setdefault(k, v)
-            elif isinstance(v, dict):
+            elif hasattr(v, 'items'):
                 for kk, vv in v.items():
                     os.environ.setdefault(kk, str(vv))
     except Exception:
@@ -71,8 +71,9 @@ def get_db_session():
     db_url = os.getenv("DATABASE_URL", "")
     if db_url and db_url.startswith("postgresql"):
         from sqlalchemy import create_engine
-        engine = create_engine(db_url, pool_pre_ping=True,
-                               connect_args={"connect_timeout": 8})
+        engine = create_engine(db_url, pool_pre_ping=False,
+                               connect_args={"connect_timeout": 8,
+                                             "options": "-c statement_timeout=15000"})
         Session = sessionmaker(bind=engine)
         return Session()
     session = get_session(cfg)
@@ -97,7 +98,7 @@ def load_produits_df():
             Produit.prix_actuel.isnot(None),
             Produit.prix_actuel > 100,
             Produit.prix_actuel < 20_000_000,
-        ).all()
+        ).limit(2000).all()
     except Exception:
         return pd.DataFrame()
     if not produits:
