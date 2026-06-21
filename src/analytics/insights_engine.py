@@ -189,7 +189,7 @@ def generer_insights(config: dict, session=None) -> dict:
         Produit.prix_actuel.isnot(None),
         Produit.prix_actuel > 0,
         Produit.prix_actuel < 50_000_000,
-    ).limit(3000).all()
+    ).limit(1000).all()
 
     # Stats par catégorie
     par_cat = {}

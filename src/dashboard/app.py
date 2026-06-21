@@ -98,7 +98,7 @@ def load_produits_df():
             Produit.prix_actuel.isnot(None),
             Produit.prix_actuel > 100,
             Produit.prix_actuel < 20_000_000,
-        ).limit(2000).all()
+        ).limit(500).all()
     except Exception:
         return pd.DataFrame()
     if not produits:
@@ -206,11 +206,13 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 with tab1:
     st.header("📊 Insights & Analyse de Marché")
 
-    df = load_produits_df()
+    with st.spinner("Chargement des données..."):
+        df = load_produits_df()
     if df.empty:
         st.info("Lancer : `python main.py scrape --source ecommerce`")
     else:
-        insights = load_insights()
+        with st.spinner("Calcul des insights..."):
+            insights = load_insights()
 
         k1, k2, k3, k4, k5 = st.columns(5)
         k1.metric("Produits analysés", f"{insights['nb_produits']:,}")
