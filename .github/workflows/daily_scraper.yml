@@ -91,7 +91,6 @@ jobs:
         continue-on-error: true
 
       - name: WhatsApp — groupes commerce
-        if: ${{ secrets.WHATSAPP_CREDS_JSON != '' }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           WHATSAPP_CREDS_JSON: ${{ secrets.WHATSAPP_CREDS_JSON }}
