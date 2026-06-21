@@ -15,9 +15,12 @@ try:
         for k, v in st.secrets.items():
             if isinstance(v, str):
                 os.environ.setdefault(k, v)
-            elif isinstance(v, dict):
+            elif hasattr(v, 'items'):
                 for kk, vv in v.items():
-                    os.environ.setdefault(kk, str(vv))
+                    if isinstance(vv, str):
+                        os.environ.setdefault(kk, vv)
+                    else:
+                        os.environ.setdefault(kk, str(vv))
 except Exception:
     pass
 
