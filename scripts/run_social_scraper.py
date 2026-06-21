@@ -59,13 +59,13 @@ except Exception as e:
 mode = sys.argv[1] if len(sys.argv) > 1 else "all"
 
 if mode in ("telegram", "all"):
-    logger.info("=== Scraping Telegram ===")
+    logger.info("=== Scraping Telegram (Bot API) ===")
     try:
-        from src.scrapers.social.telegram_scraper import scrape_and_store
-        n = scrape_and_store(session)
-        logger.info(f"Telegram: {n} messages insérés")
+        from src.scrapers.social.telegram_bot_scraper import scrape
+        n = scrape(session)
+        logger.info(f"Telegram Bot: {n} messages insérés")
     except Exception as e:
-        logger.error(f"Telegram erreur: {e}")
+        logger.error(f"Telegram Bot erreur: {e}")
 
 if mode in ("facebook", "all"):
     logger.info("=== Scraping Facebook ===")

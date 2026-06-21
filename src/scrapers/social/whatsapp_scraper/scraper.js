@@ -249,8 +249,9 @@ async function run() {
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
       if (code === DisconnectReason.loggedOut) {
-        console.error('Session expirée — regénérer WHATSAPP_CREDS_JSON');
-        process.exit(1);
+        console.log('WhatsApp: session expirée — relinkage requis (0 messages ce run)');
+        await pool.end().catch(() => {});
+        process.exit(0); // exit 0 pour ne pas bloquer le workflow
       }
     }
   });
