@@ -162,14 +162,19 @@ with st.sidebar:
     st.divider()
 
     try:
-        stats = stats_summary(config)
+        if session is None:
+            raise RuntimeError("no session")
+        nb_p  = session.query(Produit).count()
+        nb_ao = session.query(AppelOffre).filter(AppelOffre.date_limite >= datetime.utcnow()).count()
+        nb_pr = session.query(AppelOffre).filter(AppelOffre.score >= config["scoring"]["seuils"]["priorite_haute"]).count()
+        nb_in = session.query(AnnoncInformel).count()
         c1, c2 = st.columns(2)
         with c1:
-            st.metric("Produits", f"{stats['nb_produits']:,}")
-            st.metric("AOs actifs", stats["nb_aos_actifs"])
+            st.metric("Produits", f"{nb_p:,}")
+            st.metric("AOs actifs", nb_ao)
         with c2:
-            st.metric("🔴 Prioritaires", stats["ao_prioritaires"])
-            st.metric("Informel", stats["nb_informel"])
+            st.metric("🔴 Prioritaires", nb_pr)
+            st.metric("Informel", f"{nb_in:,}")
     except Exception:
         st.info("Base de données non connectée — configurez DATABASE_URL dans Secrets.")
 
