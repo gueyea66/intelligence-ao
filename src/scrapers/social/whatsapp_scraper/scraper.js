@@ -111,13 +111,13 @@ async function muteGroups(sock, groupIds) {
 async function run() {
   restoreSession();
 
-  const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, makeInMemoryStore } = await import('@whiskeysockets/baileys');
+  const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = await import('@whiskeysockets/baileys');
 
   if (!DB_URL) { console.error('DATABASE_URL manquant'); process.exit(1); }
   const pool = new Pool({ connectionString: DB_URL });
 
-  // Store in-memory pour accéder aux messages synchronisés
-  const store = makeInMemoryStore({});
+  // Buffer messages reçus via événements temps réel
+  const messageBuffer = new Map(); // jid -> []
 
 
   await pool.query(`
@@ -143,7 +143,16 @@ async function run() {
     logger: { level: 'silent', log:()=>{}, info:()=>{}, warn:()=>{}, error:()=>{}, debug:()=>{}, trace:()=>{}, child:()=>({ level:'silent', log:()=>{}, info:()=>{}, warn:()=>{}, error:()=>{}, debug:()=>{}, trace:()=>{}, child:()=>{} }) },
   });
 
-  store.bind(sock.ev);
+  // Capturer tous les messages entrants (sync + nouveaux)
+  sock.ev.on('messages.upsert', ({ messages: msgs }) => {
+    for (const msg of msgs) {
+      const jid = msg.key.remoteJid;
+      if (!jid || !jid.endsWith('@g.us')) continue;
+      if (!messageBuffer.has(jid)) messageBuffer.set(jid, []);
+      messageBuffer.get(jid).push(msg);
+    }
+  });
+
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', async ({ connection, lastDisconnect }) => {
@@ -176,12 +185,13 @@ async function run() {
       let inserted = 0;
       const since = Date.now() - DAYS_BACK * 24 * 3600 * 1000;
 
+      const totalBuf = [...messageBuffer.values()].reduce((a, b) => a + b.length, 0);
+      console.log(`${totalBuf} messages capturés au total dans ${messageBuffer.size} groupes`);
+
       for (const group of commerceGroups) {
         try {
-          // Récupérer via le store in-memory (messages synchronisés)
-          const stored = store.messages[group.id];
-          const msgs = stored ? stored.array : [];
-          console.log(`  ${group.subject}: ${msgs.length} messages en store`);
+          const msgs = messageBuffer.get(group.id) || [];
+          console.log(`  ${group.subject}: ${msgs.length} messages`);
           for (const msg of msgs) {
             if (!msg.message || msg.key.fromMe) continue;
             const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
