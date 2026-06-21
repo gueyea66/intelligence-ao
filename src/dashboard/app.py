@@ -75,7 +75,14 @@ def get_db_session():
         Base.metadata.create_all(engine)
         Session = sessionmaker(bind=engine)
         return Session()
-    return get_session(cfg)
+    session = get_session(cfg)
+    # Test que les tables existent (SQLite peut etre vide sur Streamlit Cloud)
+    try:
+        from src.database.models import Produit
+        session.query(Produit).count()
+    except Exception:
+        return None
+    return session
 
 @st.cache_data(ttl=300)
 def load_produits_df():
@@ -371,34 +378,44 @@ with tab3:
     seuil_h = config["scoring"]["seuils"]["priorite_haute"]
     seuil_s = config["scoring"]["seuils"]["a_surveiller"]
 
-    total_aos  = session.query(AppelOffre).count()
-    actifs     = session.query(AppelOffre).filter(AppelOffre.date_limite >= datetime.utcnow()).count()
-    hauts      = session.query(AppelOffre).filter(AppelOffre.score >= seuil_h).count()
-    surveiller = session.query(AppelOffre).filter(
-        AppelOffre.score >= seuil_s, AppelOffre.score < seuil_h).count()
+    if session is None:
+        st.info("Base de données non connectée — configurez DATABASE_URL dans les Secrets Streamlit.")
+    else:
+        try:
+            total_aos  = session.query(AppelOffre).count()
+            actifs     = session.query(AppelOffre).filter(AppelOffre.date_limite >= datetime.utcnow()).count()
+            hauts      = session.query(AppelOffre).filter(AppelOffre.score >= seuil_h).count()
+            surveiller = session.query(AppelOffre).filter(
+                AppelOffre.score >= seuil_s, AppelOffre.score < seuil_h).count()
+        except Exception:
+            st.error("Erreur de connexion base de données.")
+            total_aos = actifs = hauts = surveiller = 0
 
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Total AOs", total_aos)
-    k2.metric("Actifs", actifs)
-    k3.metric("🔴 HAUTE priorité", hauts)
-    k4.metric("🟡 À surveiller", surveiller)
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Total AOs", total_aos)
+        k2.metric("Actifs", actifs)
+        k3.metric("🔴 HAUTE priorité", hauts)
+        k4.metric("🟡 À surveiller", surveiller)
 
-    st.divider()
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        f_pays_ao = st.selectbox("Pays", ["Tous"] + _get_distinct(session, AppelOffre.pays), key="ao_pays")
-    with col2:
-        f_src_ao = st.selectbox("Source", ["Toutes"] + _get_distinct(session, AppelOffre.source), key="ao_src")
-    with col3:
-        score_min = st.slider("Score minimum", 0, 100, 0, key="ao_score")
+        st.divider()
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            f_pays_ao = st.selectbox("Pays", ["Tous"] + _get_distinct(session, AppelOffre.pays), key="ao_pays")
+        with col2:
+            f_src_ao = st.selectbox("Source", ["Toutes"] + _get_distinct(session, AppelOffre.source), key="ao_src")
+        with col3:
+            score_min = st.slider("Score minimum", 0, 100, 0, key="ao_score")
 
-    q_ao = session.query(AppelOffre)
-    if f_pays_ao != "Tous":  q_ao = q_ao.filter(AppelOffre.pays == f_pays_ao)
-    if f_src_ao != "Toutes": q_ao = q_ao.filter(AppelOffre.source == f_src_ao)
-    if score_min > 0:         q_ao = q_ao.filter(AppelOffre.score >= score_min)
-    aos = q_ao.order_by(AppelOffre.score.desc().nullslast()).limit(500).all()
+        try:
+            q_ao = session.query(AppelOffre)
+            if f_pays_ao != "Tous":  q_ao = q_ao.filter(AppelOffre.pays == f_pays_ao)
+            if f_src_ao != "Toutes": q_ao = q_ao.filter(AppelOffre.source == f_src_ao)
+            if score_min > 0:         q_ao = q_ao.filter(AppelOffre.score >= score_min)
+            aos = q_ao.order_by(AppelOffre.score.desc().nullslast()).limit(500).all()
+        except Exception:
+            aos = []
 
-    if aos:
+    if session and aos:
         rows = []
         for ao in aos:
             score  = ao.score or 0
@@ -578,9 +595,12 @@ with tab4:
 with tab5:
     st.header("🏪 Marché Informel")
 
-    total_inf = session.query(AnnoncInformel).count()
-    nb_zones  = len(_get_distinct(session, AnnoncInformel.vendeur_zone))
-    avec_prix = session.query(AnnoncInformel).filter(AnnoncInformel.prix_unitaire.isnot(None)).count()
+    try:
+        total_inf = session.query(AnnoncInformel).count() if session else 0
+        nb_zones  = len(_get_distinct(session, AnnoncInformel.vendeur_zone)) if session else 0
+        avec_prix = session.query(AnnoncInformel).filter(AnnoncInformel.prix_unitaire.isnot(None)).count() if session else 0
+    except Exception:
+        total_inf = nb_zones = avec_prix = 0
 
     k1, k2, k3 = st.columns(3)
     k1.metric("Total annonces", total_inf)
@@ -589,17 +609,23 @@ with tab5:
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        f_zone = st.selectbox("Zone", ["Toutes"] + _get_distinct(session, AnnoncInformel.vendeur_zone))
+        f_zone = st.selectbox("Zone", ["Toutes"] + (_get_distinct(session, AnnoncInformel.vendeur_zone) if session else []))
     with col2:
         f_type_inf = st.selectbox("Type", ["Tous", "offre", "demande"])
     with col3:
         recherche = st.text_input("🔍 Recherche produit")
 
-    q_inf = session.query(AnnoncInformel)
-    if f_zone != "Toutes":   q_inf = q_inf.filter(AnnoncInformel.vendeur_zone == f_zone)
-    if f_type_inf != "Tous": q_inf = q_inf.filter(AnnoncInformel.type == f_type_inf)
-    if recherche:            q_inf = q_inf.filter(AnnoncInformel.produit.ilike(f"%{recherche}%"))
-    annonces = q_inf.order_by(AnnoncInformel.date_collecte.desc()).limit(500).all()
+    try:
+        q_inf = session.query(AnnoncInformel) if session else None
+        if q_inf is not None:
+            if f_zone != "Toutes":   q_inf = q_inf.filter(AnnoncInformel.vendeur_zone == f_zone)
+            if f_type_inf != "Tous": q_inf = q_inf.filter(AnnoncInformel.type == f_type_inf)
+            if recherche:            q_inf = q_inf.filter(AnnoncInformel.produit.ilike(f"%{recherche}%"))
+            annonces = q_inf.order_by(AnnoncInformel.date_collecte.desc()).limit(500).all()
+        else:
+            annonces = []
+    except Exception:
+        annonces = []
 
     if annonces:
         df_inf = pd.DataFrame([{
@@ -662,25 +688,34 @@ with tab5:
 with tab6:
     st.header("🤝 Réseau Fournisseurs & Acteurs")
 
-    total_ent = session.query(Entreprise).count()
+    try:
+        total_ent = session.query(Entreprise).count() if session else 0
+    except Exception:
+        total_ent = 0
     k1, k2, k3 = st.columns(3)
     k1.metric("Entreprises", total_ent)
-    k2.metric("Pays", len(_get_distinct(session, Entreprise.pays)))
-    k3.metric("Secteurs", len(_get_distinct(session, Entreprise.secteur)))
+    k2.metric("Pays", len(_get_distinct(session, Entreprise.pays)) if session else 0)
+    k3.metric("Secteurs", len(_get_distinct(session, Entreprise.secteur)) if session else 0)
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        f_type_ent = st.selectbox("Type", ["Tous"] + _get_distinct(session, Entreprise.type))
+        f_type_ent = st.selectbox("Type", ["Tous"] + (_get_distinct(session, Entreprise.type) if session else []))
     with col2:
-        f_sect_ent = st.selectbox("Secteur", ["Tous"] + _get_distinct(session, Entreprise.secteur))
+        f_sect_ent = st.selectbox("Secteur", ["Tous"] + (_get_distinct(session, Entreprise.secteur) if session else []))
     with col3:
-        f_pays_ent = st.selectbox("Pays", ["Tous"] + _get_distinct(session, Entreprise.pays), key="ent_pays")
+        f_pays_ent = st.selectbox("Pays", ["Tous"] + (_get_distinct(session, Entreprise.pays) if session else []), key="ent_pays")
 
-    q_ent = session.query(Entreprise)
-    if f_type_ent != "Tous": q_ent = q_ent.filter(Entreprise.type == f_type_ent)
-    if f_sect_ent != "Tous": q_ent = q_ent.filter(Entreprise.secteur == f_sect_ent)
-    if f_pays_ent != "Tous": q_ent = q_ent.filter(Entreprise.pays == f_pays_ent)
-    entreprises = q_ent.order_by(Entreprise.nom).limit(500).all()
+    try:
+        q_ent = session.query(Entreprise) if session else None
+        if q_ent is not None:
+            if f_type_ent != "Tous": q_ent = q_ent.filter(Entreprise.type == f_type_ent)
+            if f_sect_ent != "Tous": q_ent = q_ent.filter(Entreprise.secteur == f_sect_ent)
+            if f_pays_ent != "Tous": q_ent = q_ent.filter(Entreprise.pays == f_pays_ent)
+            entreprises = q_ent.order_by(Entreprise.nom).limit(500).all()
+        else:
+            entreprises = []
+    except Exception:
+        entreprises = []
 
     if entreprises:
         df_ent = pd.DataFrame([{
