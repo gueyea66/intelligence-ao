@@ -111,10 +111,14 @@ async function muteGroups(sock, groupIds) {
 async function run() {
   restoreSession();
 
-  const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = await import('@whiskeysockets/baileys');
+  const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, makeInMemoryStore } = await import('@whiskeysockets/baileys');
 
   if (!DB_URL) { console.error('DATABASE_URL manquant'); process.exit(1); }
   const pool = new Pool({ connectionString: DB_URL });
+
+  // Store in-memory pour accéder aux messages synchronisés
+  const store = makeInMemoryStore({});
+
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS discussions_sociales (
@@ -139,11 +143,14 @@ async function run() {
     logger: { level: 'silent', log:()=>{}, info:()=>{}, warn:()=>{}, error:()=>{}, debug:()=>{}, trace:()=>{}, child:()=>({ level:'silent', log:()=>{}, info:()=>{}, warn:()=>{}, error:()=>{}, debug:()=>{}, trace:()=>{}, child:()=>{} }) },
   });
 
+  store.bind(sock.ev);
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', async ({ connection, lastDisconnect }) => {
     if (connection === 'open') {
       console.log('WhatsApp connecté');
+      // Attendre 10s que WhatsApp sync les messages récents
+      await new Promise(r => setTimeout(r, 10000));
       const joined = loadJoined();
 
       // 1. Rejoindre nouveaux groupes depuis known_group_links.json
@@ -171,8 +178,11 @@ async function run() {
 
       for (const group of commerceGroups) {
         try {
-          const msgs = await sock.fetchMessagesFromWA(group.id, 50);
-          for (const msg of (msgs || [])) {
+          // Récupérer via le store in-memory (messages synchronisés)
+          const stored = store.messages[group.id];
+          const msgs = stored ? stored.array : [];
+          console.log(`  ${group.subject}: ${msgs.length} messages en store`);
+          for (const msg of msgs) {
             if (!msg.message || msg.key.fromMe) continue;
             const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
             if (!text || text.length < 10) continue;
