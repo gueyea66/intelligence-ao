@@ -19,7 +19,8 @@ const SESSION_PATH = path.join(__dirname, 'session_data');
 const LINKS_FILE = path.join(__dirname, 'known_group_links.json');
 const JOINED_FILE = path.join(__dirname, 'joined_groups.json');
 
-const COMMERCE_KEYWORDS = /commerce|vente|marché|achat|prix|dakar|sénégal|senegal|business|deal|boutique|import|export|grossiste|telephone|electro|mode|tissus|alimentaire/i;
+// Scraper TOUS les groupes rejoints (pas de filtre par nom — les groupes viennent déjà de liens commerce)
+const COMMERCE_KEYWORDS = /.*/;
 const MUTE_DURATION = 365 * 24 * 3600; // 1 an en secondes
 
 function restoreSession() {
