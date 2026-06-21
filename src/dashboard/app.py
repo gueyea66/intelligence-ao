@@ -123,7 +123,8 @@ def load_insights():
         return generer_insights(get_config())
     except Exception:
         return {"nb_produits": 0, "distribution_cats": {}, "nb_anomalies": 0,
-                "entropie_marche": 0.0, "nb_sources": 0}
+                "entropie_marche": 0.0, "nb_sources": 0, "stats_categories": {},
+                "top_anomalies": [], "tendances": [], "insights_sources": []}
 
 @st.cache_data(ttl=600)
 def load_macro_df():
