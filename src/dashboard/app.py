@@ -79,7 +79,12 @@ def get_db_session():
 
 @st.cache_data(ttl=300)
 def load_produits_df():
-    session = get_db_session()
+    try:
+        session = get_db_session()
+    except Exception:
+        return pd.DataFrame()
+    if session is None:
+        return pd.DataFrame()
     produits = session.query(Produit).filter(
         Produit.prix_actuel.isnot(None),
         Produit.prix_actuel > 100,
