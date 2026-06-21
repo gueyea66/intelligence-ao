@@ -85,11 +85,14 @@ def load_produits_df():
         return pd.DataFrame()
     if session is None:
         return pd.DataFrame()
-    produits = session.query(Produit).filter(
-        Produit.prix_actuel.isnot(None),
-        Produit.prix_actuel > 100,
-        Produit.prix_actuel < 20_000_000,
-    ).all()
+    try:
+        produits = session.query(Produit).filter(
+            Produit.prix_actuel.isnot(None),
+            Produit.prix_actuel > 100,
+            Produit.prix_actuel < 20_000_000,
+        ).all()
+    except Exception:
+        return pd.DataFrame()
     if not produits:
         return pd.DataFrame()
     return pd.DataFrame([{
@@ -108,8 +111,12 @@ def load_produits_df():
 
 @st.cache_data(ttl=300)
 def load_insights():
-    from src.analytics.insights_engine import generer_insights
-    return generer_insights(get_config())
+    try:
+        from src.analytics.insights_engine import generer_insights
+        return generer_insights(get_config())
+    except Exception:
+        return {"nb_produits": 0, "distribution_cats": {}, "nb_anomalies": 0,
+                "entropie_marche": 0.0, "nb_sources": 0}
 
 @st.cache_data(ttl=600)
 def load_macro_df():
