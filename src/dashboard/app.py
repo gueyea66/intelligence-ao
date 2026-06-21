@@ -222,104 +222,78 @@ with tab1:
         k5.metric("Sources actives", insights.get("nb_sources", "—"))
 
         st.divider()
-        col1, col2 = st.columns(2)
+        with st.expander("📊 Distribution & Prix par catégorie", expanded=False):
+            col1, col2 = st.columns(2)
+            with col1:
+                dist = insights["distribution_cats"]
+                fig = px.pie(values=list(dist.values()), names=list(dist.keys()),
+                             hole=0.4, color_discrete_sequence=px.colors.qualitative.Bold)
+                fig.update_traces(textposition='inside', textinfo='percent+label')
+                fig.update_layout(showlegend=False, height=350, margin=dict(t=20,b=20))
+                st.plotly_chart(fig, use_container_width=True)
+            with col2:
+                cats = list(insights["stats_categories"].keys())
+                fig2 = go.Figure()
+                fig2.add_trace(go.Bar(name="Moyenne", x=cats,
+                    y=[insights["stats_categories"][c].get("mean",0) for c in cats], marker_color="#1565c0"))
+                fig2.add_trace(go.Bar(name="Médiane", x=cats,
+                    y=[insights["stats_categories"][c].get("median",0) for c in cats], marker_color="#42a5f5"))
+                fig2.update_layout(barmode="group", height=350, xaxis_tickangle=-30,
+                                   yaxis_title="XOF", margin=dict(t=20,b=80))
+                st.plotly_chart(fig2, use_container_width=True)
 
-        with col1:
-            st.subheader("Distribution produits par catégorie")
-            dist = insights["distribution_cats"]
-            fig = px.pie(
-                values=list(dist.values()),
-                names=list(dist.keys()),
-                hole=0.4,
-                color_discrete_sequence=px.colors.qualitative.Bold,
-            )
-            fig.update_traces(textposition='inside', textinfo='percent+label')
-            fig.update_layout(showlegend=False, height=380, margin=dict(t=20,b=20))
-            st.plotly_chart(fig, use_container_width=True)
+        with st.expander("📦 Drill-down catégorie & HHI", expanded=False):
+            col3, col4 = st.columns(2)
+            with col3:
+                cat_sel = st.selectbox("Catégorie", list(insights["stats_categories"].keys()))
+                s = insights["stats_categories"].get(cat_sel, {})
+                if s:
+                    df_cat = df[df["Catégorie"] == cat_sel]["Prix"].dropna()
+                    if not df_cat.empty:
+                        fig_box = go.Figure()
+                        fig_box.add_trace(go.Box(y=df_cat, name=cat_sel,
+                                                 boxpoints="outliers", marker_color="#1565c0"))
+                        fig_box.update_layout(height=260, margin=dict(t=10,b=10))
+                        st.plotly_chart(fig_box, use_container_width=True)
+                    c_a, c_b, c_c = st.columns(3)
+                    c_a.metric("Nb produits", s.get("n", 0))
+                    c_b.metric("Prix médian", f"{s.get('median',0):,.0f} XOF")
+                    c_c.metric("CV", f"{s.get('cv',0):.1f}%")
+            with col4:
+                hhi_data = insights.get("hhi_par_categorie", {})
+                if hhi_data:
+                    hhi_rows = [{"Catégorie": c, "HHI": v["hhi"],
+                                 "Interprétation": v["interpretation"], "Acteurs": v["nb_acteurs"]}
+                                for c, v in hhi_data.items()]
+                    df_hhi = pd.DataFrame(hhi_rows).sort_values("HHI", ascending=False)
+                    fig_hhi = px.bar(df_hhi, x="Catégorie", y="HHI", color="HHI",
+                                     color_continuous_scale=["#4caf50","#ff9800","#f44336"],
+                                     range_color=[0,5000], hover_data=["Interprétation","Acteurs"])
+                    fig_hhi.add_hline(y=1500, line_dash="dash", line_color="orange")
+                    fig_hhi.add_hline(y=2500, line_dash="dash", line_color="red")
+                    fig_hhi.update_layout(height=280, margin=dict(t=10,b=60))
+                    st.plotly_chart(fig_hhi, use_container_width=True)
 
-        with col2:
-            st.subheader("Prix moyen & médian par catégorie")
-            cats     = list(insights["stats_categories"].keys())
-            moyennes = [insights["stats_categories"][c].get("mean", 0) for c in cats]
-            medianes = [insights["stats_categories"][c].get("median", 0) for c in cats]
-
-            fig2 = go.Figure()
-            fig2.add_trace(go.Bar(name="Moyenne", x=cats, y=moyennes, marker_color="#1565c0"))
-            fig2.add_trace(go.Bar(name="Médiane", x=cats, y=medianes, marker_color="#42a5f5"))
-            fig2.update_layout(barmode="group", height=380,
-                               xaxis_tickangle=-30, yaxis_title="XOF",
-                               margin=dict(t=20, b=80))
-            st.plotly_chart(fig2, use_container_width=True)
-
-        st.divider()
-        col3, col4 = st.columns(2)
-
-        with col3:
-            st.subheader("📦 Drill-down catégorie")
-            cat_sel = st.selectbox("Catégorie", list(insights["stats_categories"].keys()))
-            s = insights["stats_categories"].get(cat_sel, {})
-            if s:
-                df_cat = df[df["Catégorie"] == cat_sel]["Prix"].dropna()
-                if not df_cat.empty:
-                    fig_box = go.Figure()
-                    fig_box.add_trace(go.Box(y=df_cat, name=cat_sel,
-                                             boxpoints="outliers",
-                                             marker_color="#1565c0"))
-                    fig_box.update_layout(height=280, margin=dict(t=10,b=10))
-                    st.plotly_chart(fig_box, use_container_width=True)
-                c_a, c_b, c_c = st.columns(3)
-                c_a.metric("Nb produits", s.get("n", 0))
-                c_b.metric("Prix médian", f"{s.get('median',0):,.0f} XOF")
-                c_c.metric("CV (volatilité)", f"{s.get('cv',0):.1f}%")
-
-        with col4:
-            st.subheader("🏭 Concentration marché (HHI)")
-            hhi_data = insights.get("hhi_par_categorie", {})
-            if hhi_data:
-                hhi_rows = [{"Catégorie": c, "HHI": v["hhi"],
-                             "Interprétation": v["interpretation"],
-                             "Nb acteurs": v["nb_acteurs"]}
-                            for c, v in hhi_data.items()]
-                df_hhi = pd.DataFrame(hhi_rows).sort_values("HHI", ascending=False)
-                fig_hhi = px.bar(df_hhi, x="Catégorie", y="HHI",
-                                 color="HHI",
-                                 color_continuous_scale=["#4caf50","#ff9800","#f44336"],
-                                 range_color=[0, 5000],
-                                 hover_data=["Interprétation","Nb acteurs"])
-                fig_hhi.add_hline(y=1500, line_dash="dash", line_color="orange",
-                                  annotation_text="Seuil concurrentiel")
-                fig_hhi.add_hline(y=2500, line_dash="dash", line_color="red",
-                                  annotation_text="Seuil concentration")
-                fig_hhi.update_layout(height=300, margin=dict(t=10,b=60))
-                st.plotly_chart(fig_hhi, use_container_width=True)
-            else:
-                st.info("HHI : données insuffisantes")
-
-        st.divider()
-        st.subheader(f"⚠️ Anomalies de prix ({len(insights['anomalies_prix'])})")
-        if insights["anomalies_prix"]:
-            df_ano = pd.DataFrame(insights["anomalies_prix"])
-            fig_ano = px.scatter(
-                df_ano, x="produit", y="prix",
-                size="z_score", color="deviation",
-                color_discrete_map={"sur-évalué":"#f44336","sous-évalué":"#4caf50"},
-                hover_data=["z_score","categorie","source"],
-            )
-            fig_ano.update_layout(height=300, xaxis_tickangle=-30, margin=dict(t=10,b=100))
-            st.plotly_chart(fig_ano, use_container_width=True)
-            with st.expander("Détail"):
+        with st.expander(f"⚠️ Anomalies de prix ({len(insights['anomalies_prix'])})", expanded=False):
+            if insights["anomalies_prix"]:
+                df_ano = pd.DataFrame(insights["anomalies_prix"])
+                fig_ano = px.scatter(df_ano, x="produit", y="prix", size="z_score",
+                                     color="deviation",
+                                     color_discrete_map={"sur-évalué":"#f44336","sous-évalué":"#4caf50"},
+                                     hover_data=["z_score","categorie","source"])
+                fig_ano.update_layout(height=300, xaxis_tickangle=-30, margin=dict(t=10,b=100))
+                st.plotly_chart(fig_ano, use_container_width=True)
                 st.dataframe(df_ano, hide_index=True)
 
-        st.divider()
-        st.subheader("🏆 Top 20 marques")
-        top_m = insights.get("top_marques", {})
-        if top_m:
-            df_m = pd.DataFrame({"Marque": list(top_m.keys()), "Produits": list(top_m.values())})
-            fig_m = px.bar(df_m.sort_values("Produits", ascending=True).tail(20),
-                           x="Produits", y="Marque", orientation="h",
-                           color="Produits", color_continuous_scale="Blues")
-            fig_m.update_layout(height=450, margin=dict(t=10,l=120))
-            st.plotly_chart(fig_m, use_container_width=True)
+        with st.expander("🏆 Top 20 marques", expanded=False):
+            top_m = insights.get("top_marques", {})
+            if top_m:
+                df_m = pd.DataFrame({"Marque": list(top_m.keys()), "Produits": list(top_m.values())})
+                fig_m = px.bar(df_m.sort_values("Produits", ascending=True).tail(20),
+                               x="Produits", y="Marque", orientation="h",
+                               color="Produits", color_continuous_scale="Blues")
+                fig_m.update_layout(height=420, margin=dict(t=10,l=120))
+                st.plotly_chart(fig_m, use_container_width=True)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -360,23 +334,24 @@ with tab2:
             use_container_width=True, hide_index=True, height=300,
         )
 
-        col_g1, col_g2 = st.columns(2)
-        with col_g1:
-            if len(dff) > 5:
-                fig = px.histogram(dff, x="Prix", nbins=50, color_discrete_sequence=["#1565c0"],
-                                   title="Distribution des prix")
-                fig.update_layout(height=300, margin=dict(t=30,b=10))
-                st.plotly_chart(fig, use_container_width=True)
-        with col_g2:
-            if len(dff) > 5:
-                top_sc = dff["Sous-cat"].value_counts().head(8).index
-                dff_sc = dff[dff["Sous-cat"].isin(top_sc)]
-                if not dff_sc.empty:
-                    fig2 = px.box(dff_sc, x="Sous-cat", y="Prix", color="Sous-cat",
-                                  points="outliers", title="Box plot par sous-catégorie")
-                    fig2.update_layout(height=300, showlegend=False,
-                                       xaxis_tickangle=-30, margin=dict(t=30,b=80))
-                    st.plotly_chart(fig2, use_container_width=True)
+        with st.expander("📊 Graphiques prix", expanded=False):
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                if len(dff) > 5:
+                    fig = px.histogram(dff, x="Prix", nbins=50, color_discrete_sequence=["#1565c0"],
+                                       title="Distribution des prix")
+                    fig.update_layout(height=300, margin=dict(t=30,b=10))
+                    st.plotly_chart(fig, use_container_width=True)
+            with col_g2:
+                if len(dff) > 5:
+                    top_sc = dff["Sous-cat"].value_counts().head(8).index
+                    dff_sc = dff[dff["Sous-cat"].isin(top_sc)]
+                    if not dff_sc.empty:
+                        fig2 = px.box(dff_sc, x="Sous-cat", y="Prix", color="Sous-cat",
+                                      points="outliers", title="Box plot sous-catégorie")
+                        fig2.update_layout(height=300, showlegend=False,
+                                           xaxis_tickangle=-30, margin=dict(t=30,b=80))
+                        st.plotly_chart(fig2, use_container_width=True)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
