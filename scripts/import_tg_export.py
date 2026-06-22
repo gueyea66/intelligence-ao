@@ -42,11 +42,11 @@ inserted = skipped = 0
 with engine.begin() as conn:
     for msg in messages:
         if msg.get("type") != "message": continue
-        text = msg.get("text", "")
-        if isinstance(text, list):
-            text = " ".join(t if isinstance(t, str) else t.get("text","") for t in text)
-        text = text.strip()
-        if len(text) < 5: continue
+        raw = msg.get("text", "")
+        if isinstance(raw, list):
+            raw = " ".join(t if isinstance(t, str) else t.get("text","") for t in raw)
+        body = raw.strip()
+        if len(body) < 5: continue
 
         msg_id = str(msg.get("id",""))
         try:
@@ -55,19 +55,21 @@ with engine.begin() as conn:
 
         sender = str(msg.get("from_id", msg.get("from", "unknown")))
         author_hash = hashlib.sha256(sender.encode()).hexdigest()
-        sent, score, prices, topics = analyze(text)
+        sent, score, prices, topics = analyze(body)
 
-        r = conn.execute(sql_text("""
+        INSERT_SQL = sql_text("""
             INSERT INTO discussions_sociales
             (plateforme,canal,canal_id,message_id,texte_brut,date_publication,
              auteur_hash,sentiment,score_sentiment,topics,prix_mentionnes,
              contient_prix,contient_contact,type_message,traite)
             VALUES (:pl,:ca,:ci,:mi,:tb,:dp,:ah,:se,:ss,:to,:pr,:cp,:cc,:tm,:tr)
             ON CONFLICT (plateforme,canal_id,message_id) DO NOTHING
-        """), dict(pl='telegram',ca=canal_name,ci=canal_id,mi=msg_id,tb=text,dp=ts,
-                   ah=author_hash,se=sent,ss=score,to=json.dumps(topics),
-                   pr=json.dumps(prices),cp=len(prices)>0,
-                   cc=bool(re.search(r'\+?\d{8,}',text)),tm='message',tr=True))
+        """)
+        r = conn.execute(INSERT_SQL, {"pl":'telegram',"ca":canal_name,"ci":canal_id,
+                   "mi":msg_id,"tb":body,"dp":ts,"ah":author_hash,"se":sent,"ss":score,
+                   "to":json.dumps(topics),"pr":json.dumps(prices),
+                   "cp":len(prices)>0,"cc":bool(re.search(r'\+?\d{8,}',body)),
+                   "tm":'message',"tr":True})
         if r.rowcount: inserted += 1
         else: skipped += 1
 
