@@ -1,6 +1,6 @@
 """
 Point d'entree Streamlit Cloud.
-Utilise importlib.reload pour re-executer app.py a chaque rerun Streamlit.
+importlib.reload si module deja charge, sinon import normal — execute le code une seule fois par rerun.
 """
 import sys
 import os
@@ -51,10 +51,15 @@ if _DB_URL and _DB_URL.startswith("postgresql"):
     except Exception:
         pass
 
-# -- Lancement du dashboard (reload a chaque rerun pour que les widgets marchent)
+# -- Lancement du dashboard ---------------------------------------------------
+# Si le module est deja dans sys.modules (reruns Streamlit) -> reload pour re-executer
+# Si premier chargement -> import normal
+# Dans les deux cas le code s'execute UNE seule fois.
 try:
-    import src.dashboard.app as _app
-    importlib.reload(_app)
+    if "src.dashboard.app" in sys.modules:
+        importlib.reload(sys.modules["src.dashboard.app"])
+    else:
+        import src.dashboard.app  # noqa: F401
 except Exception as _boot_err:
     import streamlit as st
     import traceback
