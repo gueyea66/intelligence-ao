@@ -21,26 +21,43 @@ try:
         if "database" in st.secrets and "DATABASE_URL" in st.secrets["database"]:
             _DB_URL = st.secrets["database"]["DATABASE_URL"]
             os.environ["DATABASE_URL"] = _DB_URL
+        elif "DATABASE_URL" in st.secrets:
+            _DB_URL = st.secrets["DATABASE_URL"]
+            os.environ["DATABASE_URL"] = _DB_URL
 except Exception:
     pass
 
-# ── Fallback env var (si secrets non configurés, utilise env DATABASE_URL) ────
 if not _DB_URL:
     _DB_URL = os.environ.get("DATABASE_URL", "")
     if _DB_URL:
         os.environ["DATABASE_URL"] = _DB_URL
 
-# ── Patch config.yaml pour pointer sur PostgreSQL ────────────────────────────
-try:
-    import yaml
-    cfg_path = Path(__file__).parent / "config" / "config.yaml"
-    with open(cfg_path) as f:
-        _cfg = yaml.safe_load(f)
-    _cfg["database"]["type"] = "postgresql"
-    _cfg["database"]["postgresql_url"] = _DB_URL
-    with open(cfg_path, "w") as f:
-        yaml.dump(_cfg, f, allow_unicode=True, default_flow_style=False)
-except Exception:
-    pass
+# ── Monkey-patch get_engine pour bypasser config.yaml ────────────────────────
+if _DB_URL and _DB_URL.startswith("postgresql"):
+    try:
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        import src.database.models as _models
+        _pg_engine = create_engine(
+            _DB_URL,
+            pool_pre_ping=True,
+            connect_args={"connect_timeout": 10,
+                          "options": "-c statement_timeout=20000"},
+        )
+        _models.get_engine = lambda cfg=None: _pg_engine
+        _Session = sessionmaker(bind=_pg_engine)
+        _models.get_session = lambda cfg=None: _Session()
+    except Exception:
+        pass
 
-from src.dashboard.app import *
+# ── Lancement du dashboard ────────────────────────────────────────────────────
+try:
+    from src.dashboard.app import *
+except Exception as _boot_err:
+    import streamlit as st
+    import traceback
+    st.set_page_config(page_title="Erreur démarrage", page_icon="❌")
+    st.error(f"**Erreur au démarrage :** {_boot_err}")
+    st.code(traceback.format_exc(), language="python")
+    st.info("Vérifiez que DATABASE_URL est configuré dans Secrets.")
+    st.stop()
