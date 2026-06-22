@@ -77,7 +77,6 @@ def get_db_session():
         engine = create_engine(db_url, pool_pre_ping=False,
                                connect_args={"connect_timeout": 10, "sslmode": "require"})
         try:
-            Base.metadata.drop_all(engine)
             Base.metadata.create_all(engine)
         except Exception:
             pass
