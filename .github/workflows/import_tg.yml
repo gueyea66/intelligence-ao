@@ -1,0 +1,32 @@
+name: Import Telegram Export
+
+on:
+  workflow_dispatch:
+    inputs:
+      json_url:
+        description: 'URL directe du fichier result.json (GitHub raw, etc.)'
+        required: false
+        default: ''
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install sqlalchemy psycopg2-binary
+
+      - name: Download JSON if URL provided
+        if: ${{ github.event.inputs.json_url != '' }}
+        run: curl -L "${{ github.event.inputs.json_url }}" -o result.json
+
+      - name: Import (uses result.json in repo root if no URL)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/import_tg_export.py result.json
