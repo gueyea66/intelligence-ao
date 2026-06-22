@@ -278,27 +278,47 @@ def _build_sentiment_chunks(messages: list[dict]) -> list[dict]:
 # ── Store chunks ──────────────────────────────────────────────────────────────
 
 def _store_chunks(chunks: list[dict], session) -> int:
+    """Utilise une connexion directe pour éviter la corruption de session."""
     stored = 0
+    try:
+        engine = session.get_bind()
+    except Exception:
+        engine = session.bind
+
     for c in chunks:
+        # Tronquer sujet à 190 chars pour éviter les problèmes d'encodage multi-octets
+        c = dict(c)
+        c["sj"] = str(c.get("sj") or c.get("sujet", ""))[:190]
+        # Normaliser les clés vers les paramètres SQL
+        params = {
+            "ct": c.get("ct") or c.get("chunk_type"),
+            "sj": c["sj"],
+            "zo": c.get("zo") or c.get("zone", "Afrique de l'Ouest"),
+            "pe": c.get("pe") or c.get("periode"),
+            "co": c.get("co") or c.get("contenu"),
+            "me": c.get("me") or c.get("metadata", "{}"),
+            "sc": c.get("sc") or c.get("sources_count", 0),
+            "cf": c.get("cf") or c.get("confidence", 0.5),
+        }
         try:
-            session.execute(sql_text("""
-                INSERT INTO knowledge_chunks
-                    (chunk_type, sujet, zone, periode, contenu, metadata, sources_count, confidence, updated_at)
-                VALUES
-                    (:ct, :sj, :zo, :pe, :co, :me, :sc, :cf, NOW())
-                ON CONFLICT (chunk_type, sujet, zone, periode)
-                DO UPDATE SET
-                    contenu       = EXCLUDED.contenu,
-                    metadata      = EXCLUDED.metadata,
-                    sources_count = EXCLUDED.sources_count,
-                    confidence    = EXCLUDED.confidence,
-                    updated_at    = NOW()
-            """), c)
-            session.commit()
+            with engine.connect() as conn:
+                conn.execute(sql_text("""
+                    INSERT INTO knowledge_chunks
+                        (chunk_type, sujet, zone, periode, contenu, metadata, sources_count, confidence, updated_at)
+                    VALUES
+                        (:ct, :sj, :zo, :pe, :co, :me, :sc, :cf, NOW())
+                    ON CONFLICT (chunk_type, sujet, zone, periode)
+                    DO UPDATE SET
+                        contenu       = EXCLUDED.contenu,
+                        metadata      = EXCLUDED.metadata,
+                        sources_count = EXCLUDED.sources_count,
+                        confidence    = EXCLUDED.confidence,
+                        updated_at    = NOW()
+                """), params)
+                conn.commit()
             stored += 1
         except Exception as e:
-            session.rollback()
-            logger.debug(f"chunk store error: {e}")
+            logger.warning(f"chunk store error ({params.get('ct')}/{params.get('sj')[:30]}): {e}")
     return stored
 
 
