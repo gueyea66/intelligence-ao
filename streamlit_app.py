@@ -1,6 +1,5 @@
 """
 Point d'entree Streamlit Cloud.
-importlib.reload si module deja charge, sinon import normal — execute le code une seule fois par rerun.
 """
 import sys
 import os
@@ -21,18 +20,19 @@ try:
                 for kk, vv in v.items():
                     os.environ.setdefault(kk, str(vv))
         if "database" in st.secrets and "DATABASE_URL" in st.secrets["database"]:
-            _DB_URL = st.secrets["database"]["DATABASE_URL"]
-            os.environ["DATABASE_URL"] = _DB_URL
+            _DB_URL = str(st.secrets["database"]["DATABASE_URL"])
         elif "DATABASE_URL" in st.secrets:
-            _DB_URL = st.secrets["DATABASE_URL"]
-            os.environ["DATABASE_URL"] = _DB_URL
+            _DB_URL = str(st.secrets["DATABASE_URL"])
 except Exception:
     pass
 
 if not _DB_URL:
     _DB_URL = os.environ.get("DATABASE_URL", "")
-    if _DB_URL:
-        os.environ["DATABASE_URL"] = _DB_URL
+
+# -- Nettoyer l'URL (les retours a la ligne dans la textarea corrompent l'URL) -
+if _DB_URL:
+    _DB_URL = _DB_URL.replace("\n", "").replace("\r", "").replace(" ", "").strip()
+    os.environ["DATABASE_URL"] = _DB_URL
 
 # -- Monkey-patch get_engine pour bypasser config.yaml ------------------------
 if _DB_URL and _DB_URL.startswith("postgresql"):
@@ -52,9 +52,6 @@ if _DB_URL and _DB_URL.startswith("postgresql"):
         pass
 
 # -- Lancement du dashboard ---------------------------------------------------
-# Si le module est deja dans sys.modules (reruns Streamlit) -> reload pour re-executer
-# Si premier chargement -> import normal
-# Dans les deux cas le code s'execute UNE seule fois.
 try:
     if "src.dashboard.app" in sys.modules:
         importlib.reload(sys.modules["src.dashboard.app"])
