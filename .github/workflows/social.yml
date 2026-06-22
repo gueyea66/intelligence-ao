@@ -1,0 +1,52 @@
+name: Social Scrape + Knowledge Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      days_back:
+        description: 'Jours en arrière (défaut: 7)'
+        required: false
+        default: '7'
+  schedule:
+    - cron: '30 5 * * *'   # 05h30 UTC tous les jours
+
+jobs:
+  social:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt psycopg2-binary telethon
+
+      - name: Scrape Telegram public (t.me/s/)
+        env:
+          DATABASE_URL:                ${{ secrets.DATABASE_URL }}
+          TELEGRAM_BOT_TOKEN:          ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_API_ID:             ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH:           ${{ secrets.TELEGRAM_API_HASH }}
+          TELEGRAM_SESSION_STRING:     ${{ secrets.TELEGRAM_SESSION_STRING }}
+          TELEGRAM_DAYS_BACK:          ${{ github.event.inputs.days_back || '7' }}
+          TELEGRAM_INVITE_LINKS:       ${{ secrets.TELEGRAM_INVITE_LINKS }}
+        run: python main.py social
+
+      - name: Build LLM Knowledge Base
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python main.py knowledge
+
+      - name: Import WhatsApp exports (si présents)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WA_EXPORT_DIR: data/whatsapp_exports
+        run: |
+          if ls data/whatsapp_exports/*.txt 2>/dev/null; then
+            python main.py scrape --source social
+          else
+            echo "Aucun export WhatsApp — skip"
+          fi

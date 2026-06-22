@@ -76,12 +76,19 @@ def cmd_scrape(config, source_filter=None):
         ("informel", olx_pw),           # Playwright
         ("informel", facebook_pw),      # Playwright + profil Chrome
     ]
+
+    # Sources sociales (Telegram public + WhatsApp exports)
+    from src.scrapers.social import telegram_bot_scraper, whatsapp_scraper
+    sources_social = [
+        ("social", telegram_bot_scraper),
+        ("social", whatsapp_scraper),
+    ]
     sources_annuaires = [
         ("annuaires", kompass),
         ("annuaires", europages),
     ]
 
-    all_sources = sources_ao + sources_ecommerce + sources_informel + sources_macro + sources_annuaires
+    all_sources = sources_ao + sources_ecommerce + sources_informel + sources_macro + sources_annuaires + sources_social
     if source_filter:
         all_sources = [(t, m) for t, m in all_sources if t == source_filter]
 
@@ -148,11 +155,38 @@ def cmd_alerte(config):
     print(f"✅ Alertes envoyées pour {len(aos)} AOs")
 
 
+def cmd_knowledge(config):
+    """Construit la base de connaissance LLM depuis discussions_sociales."""
+    from src.pipeline.llm_knowledge import build_knowledge_base
+    session = get_session(config)
+    stats = build_knowledge_base(session, days=30)
+    session.close()
+    print(f"✅ Knowledge base: {stats['chunks']} chunks produits depuis {stats['messages']} messages")
+
+
+def cmd_social(config):
+    """Scrape social complet : Telegram public + WhatsApp exports → Supabase."""
+    from src.scrapers.social import telegram_bot_scraper, whatsapp_scraper
+    session = get_session(config)
+    n_tg = telegram_bot_scraper.scrape(session, days_back=7)
+    n_wa = whatsapp_scraper.scrape(session)
+    session.close()
+    print(f"✅ Social: {n_tg} msgs Telegram + {n_wa} msgs WhatsApp insérés")
+    # Rebuild knowledge base après chaque scrape social
+    from src.pipeline.llm_knowledge import build_knowledge_base
+    session2 = get_session(config)
+    stats = build_knowledge_base(session2, days=30)
+    session2.close()
+    print(f"✅ Knowledge base mise à jour: {stats['chunks']} chunks")
+
+
 def cmd_run(config):
-    """Run complet : scrape → score → export → alerte."""
+    """Run complet : scrape → social → score → knowledge → export → alerte."""
     logger.info("=== RUN COMPLET ===")
     cmd_scrape(config)
+    cmd_social(config)
     cmd_score(config)
+    cmd_knowledge(config)
     cmd_export(config)
     cmd_alerte(config)
     logger.info("=== FIN RUN COMPLET ===")
@@ -203,13 +237,19 @@ def main():
     )
     parser.add_argument(
         "command",
-        choices=["init", "scrape", "score", "export", "alerte", "run", "dashboard", "schedule"],
+        choices=["init", "scrape", "score", "export", "alerte", "run",
+                 "dashboard", "schedule", "social", "knowledge"],
         help="Commande à exécuter",
     )
     parser.add_argument(
         "--source",
-        choices=["ao", "ecommerce", "informel", "macro", "annuaires"],
+        choices=["ao", "ecommerce", "informel", "macro", "annuaires", "social"],
         help="Filtre source pour scrape",
+    )
+    parser.add_argument(
+        "--days",
+        type=int, default=7,
+        help="Nombre de jours en arrière pour social/knowledge",
     )
     parser.add_argument(
         "--config",
@@ -233,6 +273,10 @@ def main():
         cmd_alerte(config)
     elif args.command == "run":
         cmd_run(config)
+    elif args.command == "social":
+        cmd_social(config)
+    elif args.command == "knowledge":
+        cmd_knowledge(config)
     elif args.command == "dashboard":
         cmd_dashboard(config)
     elif args.command == "schedule":
