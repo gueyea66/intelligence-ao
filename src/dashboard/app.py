@@ -76,10 +76,13 @@ def get_db_session():
         from sqlalchemy import create_engine
         engine = create_engine(db_url, pool_pre_ping=False,
                                connect_args={"connect_timeout": 10, "sslmode": "require"})
-        try:
-            Base.metadata.create_all(engine)
-        except Exception:
-            pass
+        with engine.connect() as _c:
+            try:
+                Base.metadata.create_all(bind=_c)
+                _c.commit()
+            except Exception:
+                _c.rollback()
+        engine.dispose()
         Session = sessionmaker(bind=engine)
         return Session()
     session = get_session(cfg)
