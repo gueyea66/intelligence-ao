@@ -1,5 +1,5 @@
-"""
-Dashboard Intelligence Commerciale AO — Sprint 4
+﻿"""
+Dashboard Intelligence Commerciale AO â€” Sprint 4
 Plotly interactif : drill-down, insights statistiques, conjoncture, anomalies.
 """
 import json
@@ -29,7 +29,7 @@ def _get_distinct(session, column) -> list:
 
 st.set_page_config(
     page_title="Intel Commerciale AO",
-    page_icon="🌍",
+    page_icon="ðŸŒ",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -67,13 +67,12 @@ def get_db_session():
     from src.database.models import get_engine, Base
     from sqlalchemy.orm import sessionmaker
     cfg = get_config()
-    # Supabase PostgreSQL si DATABASE_URL configuré, sinon SQLite local
+    # Supabase PostgreSQL si DATABASE_URL configurÃ©, sinon SQLite local
     db_url = os.getenv("DATABASE_URL", "")
     if db_url and db_url.startswith("postgresql"):
         from sqlalchemy import create_engine
         engine = create_engine(db_url, pool_pre_ping=False,
-                               connect_args={"connect_timeout": 8,
-                                             "options": "-c statement_timeout=15000"})
+                               connect_args={"connect_timeout": 10})
         Session = sessionmaker(bind=engine)
         return Session()
     session = get_session(cfg)
@@ -105,15 +104,15 @@ def load_produits_df():
         return pd.DataFrame()
     return pd.DataFrame([{
         "id":        str(p.id),
-        "Marque":    p.marque or "—",
-        "Modèle":    (p.modele or "")[:60],
-        "Catégorie": p.categorie_1 or "Divers",
+        "Marque":    p.marque or "â€”",
+        "ModÃ¨le":    (p.modele or "")[:60],
+        "CatÃ©gorie": p.categorie_1 or "Divers",
         "Sous-cat":  p.categorie_2 or "",
         "Prix":      p.prix_actuel,
-        "Barré":     p.prix_barre,
+        "BarrÃ©":     p.prix_barre,
         "Promo":     p.promotion,
         "Source":    p.source,
-        "Pays":      p.pays or "Sénégal",
+        "Pays":      p.pays or "SÃ©nÃ©gal",
         "Date":      p.date_collecte,
     } for p in produits])
 
@@ -139,10 +138,10 @@ def load_macro_df():
         return pd.DataFrame([{
             "Pays":        r.pays,
             "Indicateur":  r.indicateur,
-            "Catégorie":   r.categorie,
-            "Année":       r.annee,
+            "CatÃ©gorie":   r.categorie,
+            "AnnÃ©e":       r.annee,
             "Valeur":      r.valeur,
-            "Unité":       r.unite,
+            "UnitÃ©":       r.unite,
             "Source":      r.source,
         } for r in rows])
     except Exception:
@@ -155,10 +154,10 @@ try:
 except Exception:
     session = None
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+# â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 with st.sidebar:
-    st.title("🌍 Intel Commerciale")
-    st.caption("Afrique de l'Ouest — Sprint 4")
+    st.title("ðŸŒ Intel Commerciale")
+    st.caption("Afrique de l'Ouest â€” Sprint 4")
     st.divider()
 
     try:
@@ -173,13 +172,13 @@ with st.sidebar:
             st.metric("Produits", f"{nb_p:,}")
             st.metric("AOs actifs", nb_ao)
         with c2:
-            st.metric("🔴 Prioritaires", nb_pr)
+            st.metric("ðŸ”´ Prioritaires", nb_pr)
             st.metric("Informel", f"{nb_in:,}")
     except Exception:
-        st.info("Base de données non connectée — configurez DATABASE_URL dans Secrets.")
+        st.info("Base de donnÃ©es non connectÃ©e â€” configurez DATABASE_URL dans Secrets.")
 
     st.divider()
-    if st.button("🔄 Rafraîchir tout"):
+    if st.button("ðŸ”„ RafraÃ®chir tout"):
         st.cache_data.clear()
         st.cache_resource.clear()
         st.rerun()
@@ -189,24 +188,24 @@ with st.sidebar:
     st.code("python main.py scrape\npython main.py score", language="bash")
 
 
-# ── Onglets ───────────────────────────────────────────────────────────────────
+# â”€â”€ Onglets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "📊 Insights",
-    "📦 Catalogue",
-    "📋 Appels d'Offres",
-    "🌍 Conjoncture",
-    "🏪 Informel",
-    "🤝 Réseau",
+    "ðŸ“Š Insights",
+    "ðŸ“¦ Catalogue",
+    "ðŸ“‹ Appels d'Offres",
+    "ðŸŒ Conjoncture",
+    "ðŸª Informel",
+    "ðŸ¤ RÃ©seau",
 ])
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB 1 — INSIGHTS STATISTIQUES
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+# TAB 1 â€” INSIGHTS STATISTIQUES
+# â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
 with tab1:
-    st.header("📊 Insights & Analyse de Marché")
+    st.header("ðŸ“Š Insights & Analyse de MarchÃ©")
 
-    with st.spinner("Chargement des données..."):
+    with st.spinner("Chargement des donnÃ©es..."):
         df = load_produits_df()
     if df.empty:
         st.info("Lancer : `python main.py scrape --source ecommerce`")
@@ -215,14 +214,14 @@ with tab1:
             insights = load_insights()
 
         k1, k2, k3, k4, k5 = st.columns(5)
-        k1.metric("Produits analysés", f"{insights['nb_produits']:,}")
-        k2.metric("Catégories", len(insights["distribution_cats"]))
+        k1.metric("Produits analysÃ©s", f"{insights['nb_produits']:,}")
+        k2.metric("CatÃ©gories", len(insights["distribution_cats"]))
         k3.metric("Anomalies prix", insights["nb_anomalies"])
-        k4.metric("Diversité marché (H)", f"{insights['entropie_marche']:.2f}")
-        k5.metric("Sources actives", insights.get("nb_sources", "—"))
+        k4.metric("DiversitÃ© marchÃ© (H)", f"{insights['entropie_marche']:.2f}")
+        k5.metric("Sources actives", insights.get("nb_sources", "â€”"))
 
         st.divider()
-        with st.expander("📊 Distribution & Prix par catégorie", expanded=False):
+        with st.expander("ðŸ“Š Distribution & Prix par catÃ©gorie", expanded=False):
             col1, col2 = st.columns(2)
             with col1:
                 dist = insights["distribution_cats"]
@@ -236,19 +235,19 @@ with tab1:
                 fig2 = go.Figure()
                 fig2.add_trace(go.Bar(name="Moyenne", x=cats,
                     y=[insights["stats_categories"][c].get("mean",0) for c in cats], marker_color="#1565c0"))
-                fig2.add_trace(go.Bar(name="Médiane", x=cats,
+                fig2.add_trace(go.Bar(name="MÃ©diane", x=cats,
                     y=[insights["stats_categories"][c].get("median",0) for c in cats], marker_color="#42a5f5"))
                 fig2.update_layout(barmode="group", height=350, xaxis_tickangle=-30,
                                    yaxis_title="XOF", margin=dict(t=20,b=80))
                 st.plotly_chart(fig2, use_container_width=True)
 
-        with st.expander("📦 Drill-down catégorie & HHI", expanded=False):
+        with st.expander("ðŸ“¦ Drill-down catÃ©gorie & HHI", expanded=False):
             col3, col4 = st.columns(2)
             with col3:
-                cat_sel = st.selectbox("Catégorie", list(insights["stats_categories"].keys()))
+                cat_sel = st.selectbox("CatÃ©gorie", list(insights["stats_categories"].keys()))
                 s = insights["stats_categories"].get(cat_sel, {})
                 if s:
-                    df_cat = df[df["Catégorie"] == cat_sel]["Prix"].dropna()
+                    df_cat = df[df["CatÃ©gorie"] == cat_sel]["Prix"].dropna()
                     if not df_cat.empty:
                         fig_box = go.Figure()
                         fig_box.add_trace(go.Box(y=df_cat, name=cat_sel,
@@ -257,35 +256,35 @@ with tab1:
                         st.plotly_chart(fig_box, use_container_width=True)
                     c_a, c_b, c_c = st.columns(3)
                     c_a.metric("Nb produits", s.get("n", 0))
-                    c_b.metric("Prix médian", f"{s.get('median',0):,.0f} XOF")
+                    c_b.metric("Prix mÃ©dian", f"{s.get('median',0):,.0f} XOF")
                     c_c.metric("CV", f"{s.get('cv',0):.1f}%")
             with col4:
                 hhi_data = insights.get("hhi_par_categorie", {})
                 if hhi_data:
-                    hhi_rows = [{"Catégorie": c, "HHI": v["hhi"],
-                                 "Interprétation": v["interpretation"], "Acteurs": v["nb_acteurs"]}
+                    hhi_rows = [{"CatÃ©gorie": c, "HHI": v["hhi"],
+                                 "InterprÃ©tation": v["interpretation"], "Acteurs": v["nb_acteurs"]}
                                 for c, v in hhi_data.items()]
                     df_hhi = pd.DataFrame(hhi_rows).sort_values("HHI", ascending=False)
-                    fig_hhi = px.bar(df_hhi, x="Catégorie", y="HHI", color="HHI",
+                    fig_hhi = px.bar(df_hhi, x="CatÃ©gorie", y="HHI", color="HHI",
                                      color_continuous_scale=["#4caf50","#ff9800","#f44336"],
-                                     range_color=[0,5000], hover_data=["Interprétation","Acteurs"])
+                                     range_color=[0,5000], hover_data=["InterprÃ©tation","Acteurs"])
                     fig_hhi.add_hline(y=1500, line_dash="dash", line_color="orange")
                     fig_hhi.add_hline(y=2500, line_dash="dash", line_color="red")
                     fig_hhi.update_layout(height=280, margin=dict(t=10,b=60))
                     st.plotly_chart(fig_hhi, use_container_width=True)
 
-        with st.expander(f"⚠️ Anomalies de prix ({len(insights['anomalies_prix'])})", expanded=False):
+        with st.expander(f"âš ï¸ Anomalies de prix ({len(insights['anomalies_prix'])})", expanded=False):
             if insights["anomalies_prix"]:
                 df_ano = pd.DataFrame(insights["anomalies_prix"])
                 fig_ano = px.scatter(df_ano, x="produit", y="prix", size="z_score",
                                      color="deviation",
-                                     color_discrete_map={"sur-évalué":"#f44336","sous-évalué":"#4caf50"},
+                                     color_discrete_map={"sur-Ã©valuÃ©":"#f44336","sous-Ã©valuÃ©":"#4caf50"},
                                      hover_data=["z_score","categorie","source"])
                 fig_ano.update_layout(height=300, xaxis_tickangle=-30, margin=dict(t=10,b=100))
                 st.plotly_chart(fig_ano, use_container_width=True)
                 st.dataframe(df_ano, hide_index=True)
 
-        with st.expander("🏆 Top 20 marques", expanded=False):
+        with st.expander("ðŸ† Top 20 marques", expanded=False):
             top_m = insights.get("top_marques", {})
             if top_m:
                 df_m = pd.DataFrame({"Marque": list(top_m.keys()), "Produits": list(top_m.values())})
@@ -296,11 +295,11 @@ with tab1:
                 st.plotly_chart(fig_m, use_container_width=True)
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB 2 — CATALOGUE PRODUITS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+# TAB 2 â€” CATALOGUE PRODUITS
+# â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
 with tab2:
-    st.header("📦 Catalogue Produits")
+    st.header("ðŸ“¦ Catalogue Produits")
     df = load_produits_df()
 
     if df.empty:
@@ -308,7 +307,7 @@ with tab2:
     else:
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            f_cat = st.selectbox("Catégorie", ["Toutes"] + sorted(df["Catégorie"].unique().tolist()), key="cat2")
+            f_cat = st.selectbox("CatÃ©gorie", ["Toutes"] + sorted(df["CatÃ©gorie"].unique().tolist()), key="cat2")
         with col2:
             f_src = st.selectbox("Source", ["Toutes"] + sorted(df["Source"].unique().tolist()), key="src2")
         with col3:
@@ -318,23 +317,23 @@ with tab2:
             f_promo = st.checkbox("Promos uniquement")
 
         dff = df.copy()
-        if f_cat != "Toutes": dff = dff[dff["Catégorie"] == f_cat]
+        if f_cat != "Toutes": dff = dff[dff["CatÃ©gorie"] == f_cat]
         if f_src != "Toutes": dff = dff[dff["Source"]    == f_src]
         if f_promo:           dff = dff[dff["Promo"]      == True]
         dff = dff[(dff["Prix"] >= prix_range[0]) & (dff["Prix"] <= prix_range[1])]
 
         k1, k2, k3, k4 = st.columns(4)
-        k1.metric("Filtrés", f"{len(dff):,}")
-        k2.metric("Prix moyen",  f"{dff['Prix'].mean():,.0f} XOF" if len(dff) else "—")
-        k3.metric("Prix médian", f"{dff['Prix'].median():,.0f} XOF" if len(dff) else "—")
+        k1.metric("FiltrÃ©s", f"{len(dff):,}")
+        k2.metric("Prix moyen",  f"{dff['Prix'].mean():,.0f} XOF" if len(dff) else "â€”")
+        k3.metric("Prix mÃ©dian", f"{dff['Prix'].median():,.0f} XOF" if len(dff) else "â€”")
         k4.metric("Promos", len(dff[dff["Promo"] == True]))
 
         st.dataframe(
-            dff[["Marque","Modèle","Catégorie","Sous-cat","Prix","Barré","Promo","Source","Date"]].head(500),
+            dff[["Marque","ModÃ¨le","CatÃ©gorie","Sous-cat","Prix","BarrÃ©","Promo","Source","Date"]].head(500),
             use_container_width=True, hide_index=True, height=300,
         )
 
-        with st.expander("📊 Graphiques prix", expanded=False):
+        with st.expander("ðŸ“Š Graphiques prix", expanded=False):
             col_g1, col_g2 = st.columns(2)
             with col_g1:
                 if len(dff) > 5:
@@ -348,23 +347,23 @@ with tab2:
                     dff_sc = dff[dff["Sous-cat"].isin(top_sc)]
                     if not dff_sc.empty:
                         fig2 = px.box(dff_sc, x="Sous-cat", y="Prix", color="Sous-cat",
-                                      points="outliers", title="Box plot sous-catégorie")
+                                      points="outliers", title="Box plot sous-catÃ©gorie")
                         fig2.update_layout(height=300, showlegend=False,
                                            xaxis_tickangle=-30, margin=dict(t=30,b=80))
                         st.plotly_chart(fig2, use_container_width=True)
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB 3 — APPELS D'OFFRES
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+# TAB 3 â€” APPELS D'OFFRES
+# â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
 with tab3:
-    st.header("📋 Appels d'Offres")
+    st.header("ðŸ“‹ Appels d'Offres")
 
     seuil_h = config["scoring"]["seuils"]["priorite_haute"]
     seuil_s = config["scoring"]["seuils"]["a_surveiller"]
 
     if session is None:
-        st.info("Base de données non connectée — configurez DATABASE_URL dans les Secrets Streamlit.")
+        st.info("Base de donnÃ©es non connectÃ©e â€” configurez DATABASE_URL dans les Secrets Streamlit.")
     else:
         try:
             total_aos  = session.query(AppelOffre).count()
@@ -373,14 +372,14 @@ with tab3:
             surveiller = session.query(AppelOffre).filter(
                 AppelOffre.score >= seuil_s, AppelOffre.score < seuil_h).count()
         except Exception:
-            st.error("Erreur de connexion base de données.")
+            st.error("Erreur de connexion base de donnÃ©es.")
             total_aos = actifs = hauts = surveiller = 0
 
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Total AOs", total_aos)
         k2.metric("Actifs", actifs)
-        k3.metric("🔴 HAUTE priorité", hauts)
-        k4.metric("🟡 À surveiller", surveiller)
+        k3.metric("ðŸ”´ HAUTE prioritÃ©", hauts)
+        k4.metric("ðŸŸ¡ Ã€ surveiller", surveiller)
 
         st.divider()
         col1, col2, col3 = st.columns(3)
@@ -404,16 +403,16 @@ with tab3:
         rows = []
         for ao in aos:
             score  = ao.score or 0
-            niveau = "🔴 HAUTE" if score >= seuil_h else ("🟡 SURVEILLER" if score >= seuil_s else "⚪ ARCHIVÉ")
+            niveau = "ðŸ”´ HAUTE" if score >= seuil_h else ("ðŸŸ¡ SURVEILLER" if score >= seuil_s else "âšª ARCHIVÃ‰")
             rows.append({
-                "Score":    f"{score:.0f}" if score else "—",
+                "Score":    f"{score:.0f}" if score else "â€”",
                 "Niveau":   niveau,
                 "Source":   ao.source,
-                "Référence":ao.reference or "",
+                "RÃ©fÃ©rence":ao.reference or "",
                 "Objet":    (ao.objet or "")[:80],
-                "Entité":   ao.entite or "",
+                "EntitÃ©":   ao.entite or "",
                 "Pays":     ao.pays or "",
-                "Budget":   f"{ao.budget_estime:,.0f} {ao.devise}" if ao.budget_estime else "—",
+                "Budget":   f"{ao.budget_estime:,.0f} {ao.devise}" if ao.budget_estime else "â€”",
                 "Jours":    ao.jours_restants,
             })
         df_ao = pd.DataFrame(rows)
@@ -438,7 +437,7 @@ with tab3:
         with col_g3:
             jours = [ao.jours_restants for ao in aos if ao.jours_restants is not None]
             if jours:
-                fig_j = px.histogram(jours, nbins=15, title="Délais restants",
+                fig_j = px.histogram(jours, nbins=15, title="DÃ©lais restants",
                                      color_discrete_sequence=["#42a5f5"])
                 fig_j.add_vline(x=7, line_dash="dash", line_color="red", annotation_text="7j")
                 fig_j.update_layout(height=250, margin=dict(t=30,b=10))
@@ -447,30 +446,30 @@ with tab3:
         st.divider()
         refs = [ao.reference for ao in aos if ao.reference]
         if refs:
-            ref_sel = st.selectbox("Détail AO", refs[:50])
+            ref_sel = st.selectbox("DÃ©tail AO", refs[:50])
             ao_sel  = next((a for a in aos if a.reference == ref_sel), None)
             if ao_sel:
-                with st.expander("📄 Fiche complète", expanded=True):
+                with st.expander("ðŸ“„ Fiche complÃ¨te", expanded=True):
                     c1, c2, c3 = st.columns(3)
                     with c1:
-                        st.write(f"**Référence :** {ao_sel.reference}")
+                        st.write(f"**RÃ©fÃ©rence :** {ao_sel.reference}")
                         st.write(f"**Source :** {ao_sel.source}")
-                        st.write(f"**Entité :** {ao_sel.entite or '—'}")
+                        st.write(f"**EntitÃ© :** {ao_sel.entite or 'â€”'}")
                     with c2:
                         st.write(f"**Score :** {ao_sel.score}")
                         st.write(f"**Pays :** {ao_sel.pays}")
-                        st.write(f"**Budget :** {ao_sel.budget_estime:,.0f}" if ao_sel.budget_estime else "**Budget :** —")
+                        st.write(f"**Budget :** {ao_sel.budget_estime:,.0f}" if ao_sel.budget_estime else "**Budget :** â€”")
                     with c3:
                         st.write(f"**Jours restants :** {ao_sel.jours_restants}")
                         if ao_sel.url_source:
-                            st.markdown(f"[🔗 Voir l'AO]({ao_sel.url_source})")
-                    st.write("**Objet :**", ao_sel.objet or "—")
+                            st.markdown(f"[ðŸ”— Voir l'AO]({ao_sel.url_source})")
+                    st.write("**Objet :**", ao_sel.objet or "â€”")
 
                     if ao_sel.detail_scores:
                         try:
                             detail = json.loads(ao_sel.detail_scores)
                             fig_d = px.bar(x=list(detail.keys()), y=list(detail.values()),
-                                           labels={"x":"Critère","y":"Score"},
+                                           labels={"x":"CritÃ¨re","y":"Score"},
                                            color=list(detail.values()),
                                            color_continuous_scale="Blues")
                             fig_d.update_layout(height=250, margin=dict(t=10,b=60))
@@ -481,49 +480,49 @@ with tab3:
         st.info("Aucun AO. Lancer : `python main.py scrape --source ao && python main.py score`")
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB 4 — CONJONCTURE ÉCONOMIQUE
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+# TAB 4 â€” CONJONCTURE Ã‰CONOMIQUE
+# â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
 with tab4:
-    st.header("🌍 Conjoncture Économique — Afrique de l'Ouest")
+    st.header("ðŸŒ Conjoncture Ã‰conomique â€” Afrique de l'Ouest")
 
     df_macro = load_macro_df()
 
     if df_macro.empty:
-        st.warning("Données macro non encore collectées.")
-        if st.button("🚀 Collecter maintenant (World Bank API)"):
+        st.warning("DonnÃ©es macro non encore collectÃ©es.")
+        if st.button("ðŸš€ Collecter maintenant (World Bank API)"):
             with st.spinner("Collecte en cours..."):
                 from src.scrapers.macro import world_bank
                 n = world_bank.run(config)
                 st.cache_data.clear()
-                st.success(f"✅ {n} indicateurs collectés !")
+                st.success(f"âœ… {n} indicateurs collectÃ©s !")
                 st.rerun()
     else:
         pays_disponibles = sorted(df_macro["Pays"].unique().tolist())
-        cats_disponibles = sorted(df_macro["Catégorie"].unique().tolist())
+        cats_disponibles = sorted(df_macro["CatÃ©gorie"].unique().tolist())
 
         col1, col2 = st.columns(2)
         with col1:
             pays_sel = st.multiselect("Pays", pays_disponibles, default=pays_disponibles[:4])
         with col2:
-            cat_sel = st.selectbox("Thème", cats_disponibles)
+            cat_sel = st.selectbox("ThÃ¨me", cats_disponibles)
 
-        dff_m = df_macro[(df_macro["Pays"].isin(pays_sel)) & (df_macro["Catégorie"] == cat_sel)]
+        dff_m = df_macro[(df_macro["Pays"].isin(pays_sel)) & (df_macro["CatÃ©gorie"] == cat_sel)]
 
         if not dff_m.empty:
             indicateurs = dff_m["Indicateur"].unique().tolist()
             ind_sel = st.selectbox("Indicateur", indicateurs)
             dff_ind = dff_m[dff_m["Indicateur"] == ind_sel]
 
-            fig_m = px.line(dff_ind, x="Année", y="Valeur", color="Pays",
+            fig_m = px.line(dff_ind, x="AnnÃ©e", y="Valeur", color="Pays",
                             title=f"{ind_sel}", markers=True,
                             color_discrete_sequence=px.colors.qualitative.Bold)
             fig_m.update_layout(height=400, margin=dict(t=40,b=20))
             st.plotly_chart(fig_m, use_container_width=True)
 
-            derniere = dff_ind.sort_values("Année", ascending=False).groupby("Pays").first().reset_index()
+            derniere = dff_ind.sort_values("AnnÃ©e", ascending=False).groupby("Pays").first().reset_index()
             fig_bar = px.bar(derniere, x="Pays", y="Valeur", color="Pays", text="Valeur",
-                             title="Dernière valeur disponible",
+                             title="DerniÃ¨re valeur disponible",
                              color_discrete_sequence=px.colors.qualitative.Bold)
             fig_bar.update_traces(texttemplate='%{text:.2f}', textposition='outside')
             fig_bar.update_layout(height=320, showlegend=False, margin=dict(t=30,b=10))
@@ -531,7 +530,7 @@ with tab4:
 
         # Heatmap comparatif
         st.divider()
-        st.subheader("🗺️ Comparatif régional")
+        st.subheader("ðŸ—ºï¸ Comparatif rÃ©gional")
         indicateurs_pivot = {
             "PIB":       "Croissance PIB (%)",
             "Inflation": "Inflation CPI (%)",
@@ -541,20 +540,20 @@ with tab4:
         for theme, ind in indicateurs_pivot.items():
             df_ind = df_macro[df_macro["Indicateur"] == ind]
             if df_ind.empty: continue
-            for pays, row in df_ind.sort_values("Année", ascending=False).groupby("Pays").first().iterrows():
+            for pays, row in df_ind.sort_values("AnnÃ©e", ascending=False).groupby("Pays").first().iterrows():
                 rows_heat.append({"Pays": pays, "Indicateur": theme, "Valeur": row["Valeur"]})
 
         if rows_heat:
             df_heat = pd.DataFrame(rows_heat)
             pivot = df_heat.pivot(index="Pays", columns="Indicateur", values="Valeur")
             fig_heat = px.imshow(pivot, color_continuous_scale="RdYlGn",
-                                 title="Heatmap régionale", aspect="auto")
+                                 title="Heatmap rÃ©gionale", aspect="auto")
             fig_heat.update_layout(height=400, margin=dict(t=40,b=20))
             st.plotly_chart(fig_heat, use_container_width=True)
 
         # Publications
         st.divider()
-        st.subheader("📚 Publications & Études")
+        st.subheader("ðŸ“š Publications & Ã‰tudes")
         try:
             from src.database.models import EtudeConjoncture
             etudes = session.query(EtudeConjoncture).order_by(
@@ -564,7 +563,7 @@ with tab4:
                     "Source": e.source,
                     "Titre":  (e.titre or "")[:100],
                     "Pays":   e.pays or "",
-                    "PDF":    "✅" if e.url_pdf else "—",
+                    "PDF":    "âœ…" if e.url_pdf else "â€”",
                     "Lien":   e.url_source or "",
                 } for e in etudes])
                 st.dataframe(df_etudes, use_container_width=True, hide_index=True)
@@ -574,11 +573,11 @@ with tab4:
             st.info("Lancer `python main.py init` pour initialiser les tables macro")
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB 5 — MARCHÉ INFORMEL
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+# TAB 5 â€” MARCHÃ‰ INFORMEL
+# â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
 with tab5:
-    st.header("🏪 Marché Informel")
+    st.header("ðŸª MarchÃ© Informel")
 
     try:
         total_inf = session.query(AnnoncInformel).count() if session else 0
@@ -598,7 +597,7 @@ with tab5:
     with col2:
         f_type_inf = st.selectbox("Type", ["Tous", "offre", "demande"])
     with col3:
-        recherche = st.text_input("🔍 Recherche produit")
+        recherche = st.text_input("ðŸ” Recherche produit")
 
     try:
         q_inf = session.query(AnnoncInformel) if session else None
@@ -619,7 +618,7 @@ with tab5:
             "Prix (XOF)": a.prix_unitaire,
             "Zone":       a.vendeur_zone or "",
             "Type":       a.type or "",
-            "Contact":    "✅" if a.contact_disponible else "❌",
+            "Contact":    "âœ…" if a.contact_disponible else "âŒ",
             "Date":       a.date_collecte.strftime("%d/%m/%Y") if a.date_collecte else "",
         } for a in annonces])
         st.dataframe(df_inf, use_container_width=True, hide_index=True, height=250)
@@ -627,7 +626,7 @@ with tab5:
         col_g1, col_g2 = st.columns(2)
         with col_g1:
             zone_c = df_inf["Zone"].value_counts()
-            fig_z = px.bar(zone_c, orientation="h", title="Activité par zone",
+            fig_z = px.bar(zone_c, orientation="h", title="ActivitÃ© par zone",
                            color_discrete_sequence=["#1565c0"])
             fig_z.update_layout(height=280, margin=dict(t=30,b=10))
             st.plotly_chart(fig_z, use_container_width=True)
@@ -641,7 +640,7 @@ with tab5:
         st.info("Lancer : `python main.py scrape --source informel`")
 
     st.divider()
-    st.subheader("📝 Saisie terrain")
+    st.subheader("ðŸ“ Saisie terrain")
     with st.form("form_informel"):
         c1, c2 = st.columns(2)
         with c1:
@@ -650,9 +649,9 @@ with tab5:
             type_t  = st.selectbox("Type", ["offre", "demande"])
         with c2:
             prix_t  = st.number_input("Prix (XOF)", min_value=0, value=0)
-            qte_t   = st.number_input("Quantité", min_value=1, value=1)
+            qte_t   = st.number_input("QuantitÃ©", min_value=1, value=1)
             notes_t = st.text_area("Notes", height=80)
-        if st.form_submit_button("✅ Enregistrer") and prod_t:
+        if st.form_submit_button("âœ… Enregistrer") and prod_t:
             ann = AnnoncInformel(
                 source="Terrain", date_collecte=datetime.utcnow(),
                 type=type_t, produit=prod_t,
@@ -663,15 +662,15 @@ with tab5:
             )
             session.add(ann)
             session.commit()
-            st.success(f"✅ {prod_t} enregistré !")
+            st.success(f"âœ… {prod_t} enregistrÃ© !")
             st.rerun()
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TAB 6 — RÉSEAU
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+# TAB 6 â€” RÃ‰SEAU
+# â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
 with tab6:
-    st.header("🤝 Réseau Fournisseurs & Acteurs")
+    st.header("ðŸ¤ RÃ©seau Fournisseurs & Acteurs")
 
     try:
         total_ent = session.query(Entreprise).count() if session else 0
@@ -727,7 +726,7 @@ with tab6:
         st.info("Lancer `python main.py scrape --source annuaires` ou ajouter manuellement.")
 
     st.divider()
-    st.subheader("➕ Ajouter une entreprise")
+    st.subheader("âž• Ajouter une entreprise")
     with st.form("form_ent"):
         c1, c2 = st.columns(2)
         with c1:
@@ -737,7 +736,7 @@ with tab6:
             pays_e    = st.selectbox("Pays", config["geo"]["pays_prioritaires"])
         with c2:
             ville_e   = st.text_input("Ville")
-            taille_e  = st.selectbox("Taille", ["petite","moyenne","grande","très grande"])
+            taille_e  = st.selectbox("Taille", ["petite","moyenne","grande","trÃ¨s grande"])
             contact_e = st.text_input("Contact")
             notes_e   = st.text_area("Notes", height=80)
         if st.form_submit_button("Enregistrer") and nom_e:
@@ -746,11 +745,11 @@ with tab6:
                              notes=notes_e, source="Manuel")
             session.add(ent)
             session.commit()
-            st.success(f"✅ {nom_e} ajouté !")
+            st.success(f"âœ… {nom_e} ajoutÃ© !")
             st.rerun()
 
     st.divider()
-    uploaded = st.file_uploader("📂 Import CSV (nom, secteur, type, pays, ville, contact)", type="csv")
+    uploaded = st.file_uploader("ðŸ“‚ Import CSV (nom, secteur, type, pays, ville, contact)", type="csv")
     if uploaded:
         try:
             df_up = pd.read_csv(uploaded)
@@ -758,14 +757,15 @@ with tab6:
             for _, row in df_up.iterrows():
                 ent = Entreprise(
                     nom=str(row.get("nom","")), secteur=str(row.get("secteur","")),
-                    type=str(row.get("type","autre")), pays=str(row.get("pays","Sénégal")),
+                    type=str(row.get("type","autre")), pays=str(row.get("pays","SÃ©nÃ©gal")),
                     ville=str(row.get("ville","")), contact=str(row.get("contact","")),
                     source="Import CSV",
                 )
                 session.add(ent)
                 nb += 1
             session.commit()
-            st.success(f"✅ {nb} entreprises importées !")
+            st.success(f"âœ… {nb} entreprises importÃ©es !")
             st.rerun()
         except Exception as e:
             st.error(f"Erreur : {e}")
+

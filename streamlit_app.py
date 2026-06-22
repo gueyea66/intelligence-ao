@@ -1,5 +1,5 @@
-"""
-Point d'entrée Streamlit Cloud.
+﻿"""
+Point d'entrÃ©e Streamlit Cloud.
 """
 import sys
 import os
@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-# ── Secrets → env vars ────────────────────────────────────────────────────────
+# â”€â”€ Secrets â†’ env vars â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 _DB_URL = None
 try:
     import streamlit as st
@@ -32,7 +32,7 @@ if not _DB_URL:
     if _DB_URL:
         os.environ["DATABASE_URL"] = _DB_URL
 
-# ── Monkey-patch get_engine pour bypasser config.yaml ────────────────────────
+# â”€â”€ Monkey-patch get_engine pour bypasser config.yaml â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 if _DB_URL and _DB_URL.startswith("postgresql"):
     try:
         from sqlalchemy import create_engine
@@ -41,8 +41,7 @@ if _DB_URL and _DB_URL.startswith("postgresql"):
         _pg_engine = create_engine(
             _DB_URL,
             pool_pre_ping=True,
-            connect_args={"connect_timeout": 10,
-                          "options": "-c statement_timeout=20000"},
+            connect_args={"connect_timeout": 10},
         )
         _models.get_engine = lambda cfg=None: _pg_engine
         _Session = sessionmaker(bind=_pg_engine)
@@ -50,14 +49,15 @@ if _DB_URL and _DB_URL.startswith("postgresql"):
     except Exception:
         pass
 
-# ── Lancement du dashboard ────────────────────────────────────────────────────
+# â”€â”€ Lancement du dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 try:
     from src.dashboard.app import *
 except Exception as _boot_err:
     import streamlit as st
     import traceback
-    st.set_page_config(page_title="Erreur démarrage", page_icon="❌")
-    st.error(f"**Erreur au démarrage :** {_boot_err}")
+    st.set_page_config(page_title="Erreur dÃ©marrage", page_icon="âŒ")
+    st.error(f"**Erreur au dÃ©marrage :** {_boot_err}")
     st.code(traceback.format_exc(), language="python")
-    st.info("Vérifiez que DATABASE_URL est configuré dans Secrets.")
+    st.info("VÃ©rifiez que DATABASE_URL est configurÃ© dans Secrets.")
     st.stop()
+
