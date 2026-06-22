@@ -175,7 +175,7 @@ def get_engine(config: dict):
     DATABASE_URL env var a toujours priorité (GitHub Actions, Streamlit Cloud)."""
     import os
     env_url = os.environ.get("DATABASE_URL", "").strip()
-    if env_url and env_url.startswith("postgresql"):
+    if env_url and env_url.startswith("postgres"):
         return create_engine(
             env_url, echo=False, poolclass=NullPool,
             connect_args={"connect_timeout": 10, "sslmode": "require"},
