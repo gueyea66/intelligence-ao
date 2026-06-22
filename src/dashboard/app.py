@@ -76,14 +76,13 @@ def get_db_session():
         from sqlalchemy import create_engine
         engine = create_engine(db_url, pool_pre_ping=False,
                                connect_args={"connect_timeout": 10, "sslmode": "require"})
-        Session = sessionmaker(bind=engine)
-        _s = Session()
         try:
+            Base.metadata.drop_all(engine)
             Base.metadata.create_all(engine)
         except Exception:
-            _s.rollback()
-        _s.rollback()
-        return _s
+            pass
+        Session = sessionmaker(bind=engine)
+        return Session()
     session = get_session(cfg)
     # Test que les tables existent (SQLite peut etre vide sur Streamlit Cloud)
     try:
