@@ -1,5 +1,5 @@
-﻿"""
-Point d'entrÃ©e Streamlit Cloud.
+"""
+Point d'entree Streamlit Cloud.
 """
 import sys
 import os
@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-# â”€â”€ Secrets â†’ env vars â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Secrets -> env vars -------------------------------------------------------
 _DB_URL = None
 try:
     import streamlit as st
@@ -32,7 +32,7 @@ if not _DB_URL:
     if _DB_URL:
         os.environ["DATABASE_URL"] = _DB_URL
 
-# â”€â”€ Monkey-patch get_engine pour bypasser config.yaml â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Monkey-patch get_engine pour bypasser config.yaml ------------------------
 if _DB_URL and _DB_URL.startswith("postgresql"):
     try:
         from sqlalchemy import create_engine
@@ -49,15 +49,14 @@ if _DB_URL and _DB_URL.startswith("postgresql"):
     except Exception:
         pass
 
-# â”€â”€ Lancement du dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Lancement du dashboard ---------------------------------------------------
 try:
     from src.dashboard.app import *
 except Exception as _boot_err:
     import streamlit as st
     import traceback
-    st.set_page_config(page_title="Erreur dÃ©marrage", page_icon="âŒ")
-    st.error(f"**Erreur au dÃ©marrage :** {_boot_err}")
+    st.set_page_config(page_title="Erreur demarrage", page_icon="X")
+    st.error(f"Erreur au demarrage : {_boot_err}")
     st.code(traceback.format_exc(), language="python")
-    st.info("VÃ©rifiez que DATABASE_URL est configurÃ© dans Secrets.")
+    st.info("Verifiez que DATABASE_URL est configure dans Secrets.")
     st.stop()
-
