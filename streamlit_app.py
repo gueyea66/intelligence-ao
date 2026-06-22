@@ -1,8 +1,10 @@
 """
 Point d'entree Streamlit Cloud.
+Utilise importlib.reload pour re-executer app.py a chaque rerun Streamlit.
 """
 import sys
 import os
+import importlib
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -49,14 +51,17 @@ if _DB_URL and _DB_URL.startswith("postgresql"):
     except Exception:
         pass
 
-# -- Lancement du dashboard ---------------------------------------------------
+# -- Lancement du dashboard (reload a chaque rerun pour que les widgets marchent)
 try:
-    from src.dashboard.app import *
+    import src.dashboard.app as _app
+    importlib.reload(_app)
 except Exception as _boot_err:
     import streamlit as st
     import traceback
-    st.set_page_config(page_title="Erreur demarrage", page_icon="X")
+    try:
+        st.set_page_config(page_title="Erreur", page_icon="X")
+    except Exception:
+        pass
     st.error(f"Erreur au demarrage : {_boot_err}")
     st.code(traceback.format_exc(), language="python")
-    st.info("Verifiez que DATABASE_URL est configure dans Secrets.")
     st.stop()

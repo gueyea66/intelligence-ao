@@ -27,12 +27,15 @@ def _get_distinct(session, column) -> list:
         return []
 
 
-st.set_page_config(
-    page_title="Intel Commerciale AO",
-    page_icon="ðŸŒ",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+try:
+    st.set_page_config(
+        page_title="Intel Commerciale AO",
+        page_icon="🌍",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+except Exception:
+    pass
 
 st.markdown("""
 <style>
