@@ -185,7 +185,7 @@ with st.sidebar:
         import os as _os
         _url_set = bool(_os.getenv("DATABASE_URL",""))
         st.error(f"DB erreur: {type(_e).__name__}: {str(_e)[:200]}")
-        st.caption(f"DATABASE_URL set: {_url_set}"))
+        st.caption(f"DATABASE_URL set: {_url_set}")
 
     st.divider()
     if st.button("ðŸ”„ RafraÃ®chir tout"):
