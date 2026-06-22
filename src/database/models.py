@@ -171,7 +171,16 @@ class EtudeConjoncture(Base):
 
 
 def get_engine(config: dict):
-    """Crée le moteur SQLAlchemy selon la config (sqlite ou postgresql)."""
+    """Crée le moteur SQLAlchemy selon la config (sqlite ou postgresql).
+    DATABASE_URL env var a toujours priorité (GitHub Actions, Streamlit Cloud)."""
+    import os
+    env_url = os.environ.get("DATABASE_URL", "").strip()
+    if env_url and env_url.startswith("postgresql"):
+        return create_engine(
+            env_url, echo=False, poolclass=NullPool,
+            connect_args={"connect_timeout": 10, "sslmode": "require"},
+        )
+
     db_config = config.get("database", {})
     db_type = db_config.get("type", "sqlite")
 
