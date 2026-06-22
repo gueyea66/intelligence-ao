@@ -1,0 +1,43 @@
+name: Scrape & Store
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Source (ao | ecommerce | informel | all)'
+        required: false
+        default: 'all'
+  schedule:
+    - cron: '0 6 * * *'   # tous les jours à 06h00 UTC
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install psycopg2-binary
+
+      - name: Scrape
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          SOURCE="${{ github.event.inputs.source }}"
+          if [ -z "$SOURCE" ] || [ "$SOURCE" = "all" ]; then
+            python main.py scrape
+          else
+            python main.py scrape --source "$SOURCE"
+          fi
+
+      - name: Score
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python main.py score
