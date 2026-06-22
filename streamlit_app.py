@@ -1,4 +1,4 @@
-"""
+﻿"""
 Point d'entree Streamlit Cloud.
 """
 import sys
@@ -43,7 +43,7 @@ if _DB_URL and _DB_URL.startswith("postgresql"):
         _pg_engine = create_engine(
             _DB_URL,
             pool_pre_ping=True,
-            connect_args={"connect_timeout": 10},
+            connect_args={"connect_timeout": 10, "sslmode": "require"},
         )
         _models.get_engine = lambda cfg=None: _pg_engine
         _Session = sessionmaker(bind=_pg_engine)

@@ -75,7 +75,7 @@ def get_db_session():
     if db_url and db_url.startswith("postgresql"):
         from sqlalchemy import create_engine
         engine = create_engine(db_url, pool_pre_ping=False,
-                               connect_args={"connect_timeout": 10})
+                               connect_args={"connect_timeout": 10, "sslmode": "require"})
         try:
             Base.metadata.create_all(engine)
         except Exception:
