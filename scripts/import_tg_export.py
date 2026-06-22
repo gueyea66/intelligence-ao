@@ -4,7 +4,7 @@ Usage: python scripts/import_tg_export.py <path_to_result.json>
 """
 import json, os, re, hashlib, sys
 from datetime import datetime, timezone
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text as sql_text
 
 DB_URL = os.environ["DATABASE_URL"]
 JSON_PATH = sys.argv[1] if len(sys.argv) > 1 else "result.json"
@@ -57,7 +57,7 @@ with engine.begin() as conn:
         author_hash = hashlib.sha256(sender.encode()).hexdigest()
         sent, score, prices, topics = analyze(text)
 
-        r = conn.execute(text("""
+        r = conn.execute(sql_text("""
             INSERT INTO discussions_sociales
             (plateforme,canal,canal_id,message_id,texte_brut,date_publication,
              auteur_hash,sentiment,score_sentiment,topics,prix_mentionnes,
