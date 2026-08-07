@@ -154,6 +154,13 @@ with engine.connect() as conn:
         total_recat += rr.rowcount
     stats['recategorises'] = total_recat
 
+    # ── 4b. Normalisation pays (variantes d'encodage/accents) ─────────────────
+    r = conn.execute(text("""
+        UPDATE appels_offres SET pays = 'Sénégal'
+        WHERE pays IN ('Senegal', 'SENEGAL', 'senegal')
+    """))
+    stats['pays_normalises'] = r.rowcount
+
     # ── 5. Extraction budgets ─────────────────────────────────────────────────
     rows = conn.execute(text("""
         SELECT id, objet, donnees_brutes::text
