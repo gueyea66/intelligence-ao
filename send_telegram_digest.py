@@ -58,6 +58,37 @@ def mark_notified(ids):
         )
         conn.commit()
 
+def get_alertes_marche(limit=5):
+    """Alertes du moteur statistique (detect_alertes.py) jamais envoyees."""
+    try:
+        with engine.connect() as conn:
+            return conn.execute(text("""
+                SELECT id, alert_type, severity, texte_fr
+                FROM alertes_marche
+                WHERE digest_envoye_le IS NULL
+                ORDER BY CASE severity WHEN 'critical' THEN 0 ELSE 1 END, created_at DESC
+                LIMIT :lim
+            """), {'lim': limit}).fetchall()
+    except Exception:
+        return []  # table absente au premier deploiement — pas bloquant
+
+def mark_alertes_sent(ids):
+    if not ids:
+        return
+    with engine.connect() as conn:
+        conn.execute(text(
+            "UPDATE alertes_marche SET digest_envoye_le = NOW() WHERE id = ANY(:ids)"),
+            {'ids': list(ids)})
+        conn.commit()
+
+def format_alertes(alertes):
+    lines = ["📡 *Alertes marché (moteur statistique)*"]
+    for _id, atype, severity, texte in alertes:
+        emoji = "🔴" if severity == 'critical' else "🟠"
+        label = {"PRIX_ANOMALIE": "Anomalie prix", "SPREAD_ARBITRAGE": "Arbitrage"}.get(atype, atype)
+        lines.append(f"{emoji} *{label}* — {texte.replace('_', '-').replace('*', '')}")
+    return "\n".join(lines)
+
 DASHBOARD_URL = "https://intelligence-ao.streamlit.app"
 
 def format_message(aos):
@@ -96,12 +127,15 @@ def send(token, chat_id, text_msg):
 
 if __name__ == '__main__':
     aos = get_top_aos(limit=10, score_min=70)
+    alertes = get_alertes_marche(limit=5)
     if not aos:
         today = datetime.now().strftime('%d/%m/%Y')
         msg = (f"🎯 *Intel AO — {today}*\n_Rien de nouveau au-dessus du seuil aujourd'hui._\n\n"
                f"🌐 [Dashboard →]({DASHBOARD_URL})")
     else:
         msg = format_message(aos)
+    if alertes:
+        msg += "\n\n" + format_alertes(alertes)
 
     token = settings.telegram_token
     errors = []
@@ -119,5 +153,8 @@ if __name__ == '__main__':
     if aos and sent_ok:
         mark_notified([ao[0] for ao in aos])
         print(f"  {len(aos)} AOs marques notifie_le")
+    if alertes and sent_ok:
+        mark_alertes_sent([a[0] for a in alertes])
+        print(f"  {len(alertes)} alertes marquees envoyees")
 
     sys.exit(1 if errors else 0)
